@@ -59,11 +59,12 @@ def amplitude(signal, sampleFrequency, frequency):
     return value
 
 
-def get_HCR(signal, center_frequency, sideband_frequency, order, num=5):
+def get_HCR(signal, sampleFrequency, center_frequency, sideband_frequency, order, num=5):
     """
     计算选定振动测点特征能量比;边带频率和中心频率的比值
 
     :param signal:振动测点输入信号
+    :param sampleFrequency: 采样频率
     :param center_frequency:   float:测点-特征名称（中心频率）
     :param sideband_frequency: float:测点-特征名称（边带频率）
     :param order:  int:阶次
@@ -75,34 +76,36 @@ def get_HCR(signal, center_frequency, sideband_frequency, order, num=5):
     value2 = 0  # 分母
     for i in range(order):
         for j in range(num):
-            value3 = math.sqrt(sum(amplitude(center_frequency-j*sideband_frequency)**2 + \
-                          amplitude(center_frequency+j*sideband_frequency)**2))
+            value3 = math.sqrt(sum(amplitude(signal, sampleFrequency, center_frequency-j*sideband_frequency)**2 + \
+                          amplitude(signal, sampleFrequency,center_frequency+j*sideband_frequency)**2))
             value1 += value3
 
-        value4 = math.sqrt(amplitude(center_frequency)**2)
+        value4 = math.sqrt(amplitude(signal, sampleFrequency,center_frequency)**2)
         value2 += value4
     return value1/value2
 
 
-def get_HS(signal, x_frequency, order):
+def get_HS(signal, sampleFrequency, x_frequency, order):
     """
     计算倍频能量和，频率及对应阶次，如x_frequency=50Hz,order=3;则计算50Hz,100Hz,150Hz对应的频率幅值
     :param signal:
+    :param sampleFrequency: 采样频率
     :param X_frequency:需要计算的频率
     :param order: 频率对应的阶次
     :return:所有频率和
     """
     frequency_amplitude_list = []
     for i in range(order):
-        value = amplitude(i*x_frequency)
+        value = amplitude(signal, sampleFrequency, i*x_frequency)
         frequency_amplitude_list.append(value)
     return np.sqrt(np.sum(frequency_amplitude_list))
 
 
-def get_HCS(signal,center_frequency, sideband_frequency, order, num=5):
+def get_HCS(signal, sampleFrequency, center_frequency, sideband_frequency, order, num=5):
     """
 
     :param signal: 振动测点输入信号
+    :param sampleFrequency: 采样频率
     :param center_frequency: float:测点-特征名称（中心频率）
     :param sideband_frequency: float:测点-特征名称（边带频率）
     :param order: int:阶次
@@ -137,25 +140,31 @@ def get_HDS(signal, fraction_frequency, order):
     return 0.707*np.sqrt(np.sum([x**2 for x in value_list]))
 
 
-def get_HRS(signal, frequency_low, frequency_high):
+def get_HRS(signal, sampleFrequency, frequency_low, frequency_high):
     """
     根据给出的频率范围，计算频带能量和
     :param signal:波形信号
-    :param frequency_low:频带下线
-    :param frequency_high:频带上线
+    :param frequency_low:频带下限
+    :param frequency_high:频带上限
     :return:频带能量和
     """
-    x_axis = []  # FFT后横坐标，频率
-    y_axis = []  # FFT后纵坐标，幅值
+
+    x_axis, y_axis = fft_spectrum(signal, sampleFrequency)
+    # x_axis = []  # FFT后横坐标，频率
+    # y_axis = []  # FFT后纵坐标，幅值
     ratio = x_axis[1] - x_axis[0]
     t1 = frequency_low / ratio
     t2 = frequency_high / ratio
     return np.sqrt(np.sum([x**2 for x in y_axis[t1, t2]]))
 
 
-def Numaverage(data:list):
-
-    pass
+def Numaverage(data_trend: list) -> float:
+    """
+    计算一段数据的平均值
+    :param data: 数据列表
+    return float
+    """
+    return float(np.mean(data_trend))
 
 
 def detrend(signal, deg=2):
@@ -170,9 +179,6 @@ def detrend(signal, deg=2):
     fun = np.polyfit(x_signal, signal_array, deg)
     polyfit_signal = np.polyval(fun, x_signal)
     return signal_array - polyfit_signal
-
-
-
 
 
 
@@ -270,8 +276,8 @@ def calculate_feature(data, feature='rms', fs=None):
         value = (max(data) - min(data)) / 2
     # elif feature == 'kurtosis':
     #     value = self._extracted_kurtosis_skew(data, 4)
-    # elif feature == 'impulse':
-    #     value = np.sqrt(np.mean(data ** 2))  # 需要确认宁国水泥最新算法，好像是有效值计算方法
+    elif feature == 'impulse':
+        value = np.sqrt(np.mean(data ** 2))  # 需要确认宁国水泥最新算法，好像是有效值计算方法
     # elif feature == 'skew':
     #     value = self._extracted_kurtosis_skew(data, 3)
     return value
@@ -365,15 +371,77 @@ def VibFeatures(signal, sampleFrequency, rpm, featureName="rms"):
         p1 = int((i * x_1 - 1) / ratio)  # 倍频左侧1Hz
         p2 = math.ceil((i * x_1 + 1) / ratio)  # 倍频右侧1Hz
         return_list.append(np.max(y_axis[p1:p2]))  # 从y_axis[p1:p2]中取最大值
-    feature_return.x_half1 = return_list[0]
-    feature_return.x_half3 = return_list[2]
-    feature_return.x_half5 = return_list[4]
-    feature_return.x_half7 = return_list[6]
-    feature_return.x_half9 = return_list[8]
-    feature_return.x_half11 = return_list[10]
-    feature_return.x_1 = return_list[1]
-    feature_return.x_1 = return_list[3]
-    feature_return.x_1 = return_list[5]
-    feature_return.x_1 = return_list[7]
-    feature_return.x_1 = return_list[9]
+    feature_return.x_half1 = return_list[0]  # 0.5倍频
+    feature_return.x_half3 = return_list[2]  # 1.5倍频
+    feature_return.x_half5 = return_list[4]  # 2.5倍频
+    feature_return.x_half7 = return_list[6]  # 3.5倍频
+    feature_return.x_half9 = return_list[8]  # 4.5倍频
+    feature_return.x_half11 = return_list[10] # 5.5倍频
+    feature_return.x_1 = return_list[1]  # 一倍频
+    feature_return.x_2 = return_list[3]  # 二倍频
+    feature_return.x_3 = return_list[5]  # 三倍频
+    feature_return.x_4 = return_list[7]  # 四倍频
+    feature_return.x_5 = return_list[9]  # 五倍频
     return feature_return
+
+
+def get_VIB(signal, sampleFrequency, rpm, featureName="rms"):
+    """
+    计算振动波形信号的特征值
+    :param signal: 振动信号原始波形-加速度
+    :param sampleFrequency: 信号采样频率
+    :param rpm: 该通道位置处对应的转速
+    :return: 特征值
+    """
+
+    signal -= np.mean(signal)
+
+    if featureName == "acc_rms":
+        # 加速度有效值
+        acc_rms = calculate_feature(signal, sampleFrequency, 'rms')
+        return acc_rms
+
+    if featureName == "rms":
+        # 速度有效值
+        passband_acc_wave = filter_wave(signal, 128, [10, 1000], "bandpass", sampleFrequency)
+        passband_wave = iomega(passband_acc_wave, dt=1 / len(passband_acc_wave), out_type=2, in_type=3,
+                               freq_ratio=[10, 1000], return_type='signal')
+        passband_rms = calculate_feature(passband_wave, 'rms')
+        return passband_rms
+
+    if featureName == 'impulse':
+        # 冲击值
+        sideband_acc_wave = filter_wave(signal, 128, [5000, 10000], "bandpass", sampleFrequency)
+        impulse_wave_1 = hilbert_envelop(sideband_acc_wave)
+        impulse_wave = filter_wave(impulse_wave_1, 128, 1000, "lowpass", len(impulse_wave_1))
+        impulse = calculate_feature(impulse_wave, 'impulse')
+        return impulse
+
+    if featureName == "xampl":
+        # 倍频值
+        return_list = []
+        x_axis, y_axis = fft_spectrum(signal, sampleFrequency)
+        if rpm is None:
+            try:
+                # 防止y_axis长度不足1000时
+                max_ampl_index = y_axis[0:999].index(y_axis[0:999])  # 取0-1000Hz中的最大值
+                rpm = x_axis[max_ampl_index][0] * 60  # 根据幅值中最大值索引找到频率中对应位置
+            except IndexError:
+                max_ampl_index = y_axis.index(y_axis)  # 取0-1000Hz中的最大值
+                rpm = x_axis[max_ampl_index][0] * 60
+        ratio = x_axis[1] - x_axis[0]  # 频率分辨率
+        x_1 = rpm / 60
+        for i in [1, 2]:
+            p1 = int((i * x_1 - 1) / ratio)  # 倍频左侧1Hz
+            p2 = math.ceil((i * x_1 + 1) / ratio)  # 倍频右侧1Hz
+            return_list.append(np.max(y_axis[p1:p2]))  # 从y_axis[p1:p2]中取最大值
+
+        return return_list   # return_list[0] 1倍频; return_list[1]  2倍频
+
+
+
+
+
+
+
+
