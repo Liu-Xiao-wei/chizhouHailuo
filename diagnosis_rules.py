@@ -459,7 +459,7 @@ class Bilengji_Fengji:
 
         sign = sign_1 + sign_2 + sign_3 + sign_4
         if sign:
-            return dict(故障模式=str(conclusion_return.iloc[11]["故障模式"]),   # 机理模型读入新的的表格
+            return dict(故障模式=str(conclusion_return.iloc[11]["故障模式"]),
                         机理现象=str(conclusion_return.iloc[11]["机理现象"]),
                         机理原因=str(conclusion_return.iloc[11]["机理原因"]))
         else:
@@ -615,9 +615,9 @@ class Gearbox:
         sign = sign_1 + sign_2
 
         if sign:
-            return dict(故障模式=str(conclusion_return.iloc[15]["故障模式"]),  # 机理模型读入新的的表格
-                        机理现象=str(conclusion_return.iloc[15]["机理现象"]),
-                        机理原因=str(conclusion_return.iloc[15]["机理原因"]))
+            return dict(故障模式=str(conclusion_return.iloc[13]["故障模式"]),
+                        机理现象=str(conclusion_return.iloc[13]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[13]["机理原因"]))
         else:
             return "齿轮平衡"
 
@@ -642,9 +642,9 @@ class Gearbox:
         sign = sign_1 + sign_2
 
         if sign:
-            return dict(故障模式=str(conclusion_return.iloc[15]["故障模式"]),  # 机理模型读入新的的表格
-                        机理现象=str(conclusion_return.iloc[15]["机理现象"]),
-                        机理原因=str(conclusion_return.iloc[15]["机理原因"]))
+            return dict(故障模式=str(conclusion_return.iloc[14]["故障模式"]),
+                        机理现象=str(conclusion_return.iloc[14]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[14]["机理原因"]))
         else:
             return "齿轮同轴"
 
@@ -678,7 +678,7 @@ class Gearbox:
         sign = sign_1 + sign_2
 
         if sign:
-            return dict(故障模式=str(conclusion_return.iloc[15]["故障模式"]),  # 机理模型读入新的的表格
+            return dict(故障模式=str(conclusion_return.iloc[15]["故障模式"]),
                         机理现象=str(conclusion_return.iloc[15]["机理现象"]),
                         机理原因=str(conclusion_return.iloc[15]["机理原因"]))
         else:
@@ -700,59 +700,46 @@ class Gearbox:
                 1] > 0.4 and get_VIB(self.data1, self.fs, self.rpm, "impulse") > 3) or \
                 (get_HS(self.data2, self.fs, self.bbf["BPFI"], 5) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
                 1]> 0.4 and get_VIB(self.data2, self.fs, self.rpm, "impulse") > 3):
-                return dict(故障模式=str("轴承内圈故障"),
-                        机理现象=str("轴承座径向振动大，轴承温度升高"),
-                        机理原因=str("磨损擦伤、点蚀、疲劳剥落；润滑油脂乳化、结块、含有杂质等引起的理化指标下降；轴承处于贫油状态等"))
+                return dict(故障模式=str(conclusion_return.iloc[7]["故障模式"]),
+                        机理现象=str(conclusion_return.iloc[7]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[7]["机理原因"]))
 
         if self.data1 or self.data2:
             if (get_HS(self.data1, self.fs, self.bbf["BPFO"], 5) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
                 1] > 0.4 and get_VIB(self.data1, self.fs, self.rpm, "impulse") > 3) or \
                     (get_HS(self.data2, self.fs, self.bbf["BPFO"], 5) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
                 1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "impulse") > 3):
-                return dict(故障模式=str("轴承外圈故障"),
-                            机理现象=str("轴承座径向振动大，轴承温度升高"),
-                            机理原因=str(
-                                "磨损擦伤、点蚀、疲劳剥落；润滑油脂乳化、结块、含有杂质等引起的理化指标下降；轴承处于贫油状态等"))
+                return dict(故障模式=str(conclusion_return.iloc[8]["故障模式"]),
+                        机理现象=str(conclusion_return.iloc[8]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[8]["机理原因"]))
 
         if self.data1 or self.data2:
             if (get_HS(self.data1, self.fs, self.bbf["BSF"], 5) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
                 1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "impulse") > 3) or \
                     (get_HS(self.data1, self.fs, self.bbf["BSF"], 5) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
                 1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm,"impulse") > 3):
-                return dict(故障模式=str("轴承外圈故障"),
-                            机理现象=str("轴承座径向振动大，轴承温度升高"),
-                            机理原因=str(
-                                "磨损擦伤、点蚀、疲劳剥落；润滑油脂乳化、结块、含有杂质等引起的理化指标下降；轴承处于贫油状态等"))
+                return dict(故障模式=str(conclusion_return.iloc[9]["故障模式"]),
+                        机理现象=str(conclusion_return.iloc[9]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[9]["机理原因"]))
 
-        if self.data1 or self.data2:
-            if (get_HS(self.data1, self.fs, self.bbf["FTF"], 5) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
-                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "impulse") > 3) or \
-                    (get_HS(self.data2, self.fs, self.bbf["FTF"], 5) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
-                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "impulse") > 3):
-                return dict(故障模式=str("轴承滚动体故障"),
-                            机理现象=str("轴承座径向振动大，轴承温度升高"),
-                            机理原因=str(
-                                "磨损擦伤、点蚀、疲劳剥落；润滑油脂乳化、结块、含有杂质等引起的理化指标下降；轴承处于贫油状态等"))
 
         if self.data1 or self.data2:
             if (get_HS(self.data1, self.fs, self.bbf["FTF"], 5) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
                 1] > 0.4 and get_VIB(self.data1, self.fs, self.rpm,"impulse") > 3) or \
                     (get_HS(self.data2, self.fs, self.bbf["FTF"], 5) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
                 1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "impulse") > 3):
-                return dict(故障模式=str("轴承保持架故障"),
-                            机理现象=str("轴承座径向振动大，轴承温度升高"),
-                            机理原因=str(
-                                "磨损擦伤、点蚀、疲劳剥落；润滑油脂乳化、结块、含有杂质等引起的理化指标下降；轴承处于贫油状态等"))
+                return dict(故障模式=str(conclusion_return.iloc[10]["故障模式"]),
+                        机理现象=str(conclusion_return.iloc[10]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[10]["机理原因"]))
 
         if self.data1 or self.data2:
             if (get_HS(self.data1, self.fs, self.X_1*2, 1) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
                 1] > 0.4 and get_VIB(self.data1, self.fs, self.rpm, "rms") > 4.5) or \
                     (get_HS(self.data2, self.fs, self.X_1*2, 1) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
                 1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm,  "rms") > 4.5):
-                return dict(故障模式=str("轴承不对中"),
-                            机理现象=str("轴承座径向振动大，轴承温度升高"),
-                            机理原因=str(
-                                "轴承座标高和轴中心位置偏差，安装误差、轴承座松动、安装不牢靠"))
+                return dict(故障模式=str(conclusion_return.iloc[11]["故障模式"]),
+                        机理现象=str(conclusion_return.iloc[11]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[11]["机理原因"]))
 
 
 class Fengji:
@@ -830,9 +817,9 @@ class Fengji:
 
         sign = sign_1 + sign_2 + sign_3 + sign_4
         if sign:
-            return dict(故障模式=str(conclusion_return.iloc[11]["故障模式"]),
-                        机理现象=str(conclusion_return.iloc[11]["机理现象"]),
-                        机理原因=str(conclusion_return.iloc[11]["机理原因"]))
+            return dict(故障模式=str(conclusion_return.iloc[12]["故障模式"]),
+                        机理现象=str(conclusion_return.iloc[12]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[12]["机理原因"]))
         else:
             return "转子平衡"
 
@@ -904,9 +891,9 @@ class Fengji:
         sign =  sign_1 + sign_2
 
         if sign:
-            return dict(故障模式=str(conclusion_return.iloc[13]["故障模式"]),
-                        机理现象=str(conclusion_return.iloc[13]["机理现象"]),
-                        机理原因=str(conclusion_return.iloc[13]["机理原因"]))
+            return dict(故障模式=str(conclusion_return.iloc[17]["故障模式"]),
+                        机理现象=str(conclusion_return.iloc[17]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[17]["机理原因"]))
         else:
             return "没有油膜涡动"
 
