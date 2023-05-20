@@ -18,6 +18,11 @@
                "rpm":["转速":1800,"转频":30],
                "bpf":["value":[]] # 叶片通过频率
                "dbpf":["value":[]] # ???
+               
+               "bff":["BPFI": BPFI, "BPFO": BPFO, "BSF": BSF, "FTF": FTF] # 轴承故障频率:Bearing failure frequency, 
+                                                                         BPFI:轴承内圈故障频率; BPFO: 轴承外圈故障频率; BSF: 轴承滚动体故障频率; FTF: 轴承保持架故障
+                "gmf":["value":[]]  # 齿轮啮合频率
+        
                "point_id":"01"
                },
                {"point_id":"02",},
@@ -50,6 +55,7 @@ trend_data
  'BTemp': [[1,2,...,100],[1,2,...,100],[1,2,...,100],[1,2,...,100]] 轴承水温
  "bpf" : [1,2,...,100] BPF对应幅值，振动频率表现为叶片通过频率BPF
  "dbpf" : [1,2,...,100] DBPF对应幅值
+ 
  ...
 }
 #################################################
@@ -62,20 +68,20 @@ trend_data
 
 """""
 from feature_function import *
+
 # 篦冷风机
-conclusion_return = pd.read_excel(r'F:\Aaxiaowei\算法组\雪工资料\主泵机理模型梳理20220715(1).xlsx')
+# conclusion_return = pd.read_excel(r'F:\Aaxiaowei\算法组\雪工资料\主泵机理模型梳理20220715(1).xlsx')
+conclusion_return = pd.read_excel(r'./池州海螺机理模型梳理.xlsx')  # 根据主泵和旋转设备整理而得
 
 class Bilengji_Dianji:
 
     def __int__(self, json1, alarm_message, trend_data):
         self.point_data = json1["point_data"]
         self.point_info = json1['points_info']
-        self.alarm_channel1 = alarm_message["电机"][0] # 电机上壳横向振动X方向
-        self.alarm_channel2 = alarm_message["电机"][1] # 电机上壳横向振动Y方向
+        self.alarm_channel1 = alarm_message["电机"][0]  # 电机上壳横向振动X方向
+        self.alarm_channel2 = alarm_message["电机"][1]  # 电机上壳横向振动Y方向
         self.alarm_channel3 = alarm_message["电机"][2]  # 电机下壳横向振动X方向
         self.alarm_channel4 = alarm_message["电机"][3]  # 电机下壳横向振动Y方向
-        self.alarm_channel5 = alarm_message["电机"][4]  # 电机下壳横向振动Z方向
-
 
         self.data1 = self.point_data[self.alarm_channel1]['vel_data']['value']  #
         self.frequency_1 = self.point_info[self.alarm_channel1]['sn_info']['hz']
@@ -85,26 +91,23 @@ class Bilengji_Dianji:
         self.frequency_3 = self.point_info[self.alarm_channel3]['sn_info']['hz']
         self.data4 = self.point_data[self.alarm_channel4]['vel_data']['value']
         self.frequency_4 = self.point_info[self.alarm_channel4]['sn_info']['hz']
-        self.data5 = self.point_data[self.alarm_channel5]['vel_data']['value']
-        self.frequency_5 = self.point_info[self.alarm_channel5]['sn_info']['hz']
+
 
         self.data1_trend = trend_data[alarm_message["电机"][0]]
         self.data2_trend = trend_data[alarm_message["电机"][1]]
         self.data3_trend = trend_data[alarm_message["电机"][2]]
         self.data4_trend = trend_data[alarm_message["电机"][3]]
-        self.data5_trend = trend_data[alarm_message["电机"][4]] # 轴向趋势
 
-        self.twosf0 = json1["twosf0"] # 旋转磁场超越转子速度[f0/P- (1-s)f0/P] ×2P= 2sf0。
-        self.fs = json1["fs"] # 采样频率
-        self.rpm = json1["rpm"]["转速"] #
-        self.X_1 = self.rpm / 60 # 一倍频
-        self.bpf = json1["bpf"]["value"] # 叶片通过频率
-        self.dbpf = json1["rbpf"]["value"] # 转子条通过频率RBPF，
-        self.sw_freq = json1["swirl_frequency"] # 涡动频率
+        self.twosf0 = json1["twosf0"]  # 旋转磁场超越转子速度[f0/P- (1-s)f0/P] ×2P= 2sf0。
+        self.fs = json1["fs"]  # 采样频率
+        self.rpm = json1["rpm"]["转速"]  #
+        self.X_1 = self.rpm / 60  # 一倍频
 
+        self.bbf = json1["bbf"] # 轴承故障频率 ["BPFI": BPFI, "BPFO": BPFO, "BSF": BSF, "FTF": FTF]
 
     def dingziyichang(self):  # 1,电机定子异常故障
         sign_1, sign_2, sign_3, sign_4 = 0, 0, 0, 0
+
         if self.data1:
             if ((get_HS(self.data1, self.fs, 100, 1)/get_HS(self.data1, self.fs, self.X_1, 1)) >= 1 or Numaverage(self.data1_trend['X_2f0']) >= 0.8):
                 sign_1 = 1
@@ -141,25 +144,33 @@ class Bilengji_Dianji:
     def qixipianxin(self):  # 2, 电机气隙动态偏心
         sign_1, sign_2, sign_3, sign_4 = 0, 0, 0, 0
         if self.data1:
-            if (get_HCR(self.data1, self.fs, self.twosf0, 100, 5) >= 0.5 or get_HS(self.data1, self.fs, self.twosf0, 5) / get_HS(self.data1, self.fs, self.X_1, 1) >= 1):
+            if (get_HCR(self.data1, self.fs, self.twosf0, 100, 5) >= 0.5 or get_HS(self.data1, self.fs, self.twosf0,
+                                                                                   5) / get_HS(self.data1, self.fs,
+                                                                                               self.X_1, 1) >= 1):
                 sign_1 = 1
             else:
                 sign_1 = 0
 
         if self.data2:
-            if (get_HCR(self.data2, self.fs, self.twosf0, 100, 5) >= 0.5 or get_HS(self.data2, self.fs, self.twosf0, 5) / get_HS(self.data2, self.fs, self.X_1, 1) >= 1):
+            if (get_HCR(self.data2, self.fs, self.twosf0, 100, 5) >= 0.5 or get_HS(self.data2, self.fs, self.twosf0,
+                                                                                   5) / get_HS(self.data2, self.fs,
+                                                                                               self.X_1, 1) >= 1):
                 sign_2 = 1
             else:
                 sign_2 = 0
 
         if self.data3:
-            if (get_HCR(self.data3, self.fs, self.twosf0, 100, 5) >= 0.5 or get_HS(self.data3, self.fs, self.twosf0, 5) / get_HS(self.data3, self.fs, self.X_1, 1) >= 1):
+            if (get_HCR(self.data3, self.fs, self.twosf0, 100, 5) >= 0.5 or get_HS(self.data3, self.fs, self.twosf0,
+                                                                                   5) / get_HS(self.data3, self.fs,
+                                                                                               self.X_1, 1) >= 1):
                 sign_3 = 1
             else:
                 sign_3 = 0
 
         if self.data4:
-            if (get_HCR(self.data4, self.fs, self.twosf0, 100, 5) >= 0.5 or get_HS(self.data4, self.fs, self.twosf0, 5) / get_HS(self.data4, self.fs, self.X_1, 1) >= 1):
+            if (get_HCR(self.data4, self.fs, self.twosf0, 100, 5) >= 0.5 or get_HS(self.data4, self.fs, self.twosf0,
+                                                                                   5) / get_HS(self.data4, self.fs,
+                                                                                               self.X_1, 1) >= 1):
                 sign_4 = 1
             else:
                 sign_4 = 0
@@ -175,25 +186,29 @@ class Bilengji_Dianji:
     def zhuanzitongtiaoduanlie(self):  # 3 电机转子铜条断裂
         sign_1, sign_2, sign_3, sign_4 = 0, 0, 0, 0
         if self.data1:
-            if (get_HCR(self.data1, self.fs, self.twosf0, 100, 5) >= 0.5 or Numaverage(self.data1_trend["1倍频"]) >= 0.8):
+            if (get_HCR(self.data1, self.fs, self.twosf0, 100, 5) >= 0.5 or Numaverage(
+                    self.data1_trend["1倍频"]) >= 0.8):
                 sign_1 = 1
             else:
                 sign_1 = 0
 
         if self.data2:
-            if (get_HCR(self.data2, self.fs, self.twosf0, 100, 5) >= 0.5 or Numaverage(self.data2_trend["1倍频"]) >= 0.8):
+            if (get_HCR(self.data2, self.fs, self.twosf0, 100, 5) >= 0.5 or Numaverage(
+                    self.data2_trend["1倍频"]) >= 0.8):
                 sign_2 = 1
             else:
                 sign_2 = 0
 
         if self.data3:
-            if (get_HCR(self.data2, self.fs, self.twosf0, 100, 5) >= 0.5 or Numaverage(self.data2_trend["1倍频"]) >= 0.8):
+            if (get_HCR(self.data2, self.fs, self.twosf0, 100, 5) >= 0.5 or Numaverage(
+                    self.data2_trend["1倍频"]) >= 0.8):
                 sign_3 = 1
             else:
                 sign_3 = 0
 
         if self.data4:
-            if (get_HCR(self.data2, self.fs, self.twosf0, 100, 5) >= 0.5 or Numaverage(self.data2_trend["1倍频"]) >= 0.8):
+            if (get_HCR(self.data2, self.fs, self.twosf0, 100, 5) >= 0.5 or Numaverage(
+                    self.data2_trend["1倍频"]) >= 0.8):
                 sign_4 = 1
             else:
                 sign_4 = 0
@@ -205,28 +220,36 @@ class Bilengji_Dianji:
         else:
             return "电机转子铜条没有断裂"
 
-    def zhuanzitongtiaosongdonghuotuoluo(self):  # 4 电机转子铜条松动或脱落
+    def zhuanzibupingheng(self):  # 5 转子不平衡
         sign_1, sign_2, sign_3, sign_4 = 0, 0, 0, 0
         if self.data1:
-            if (get_HCR(self.data1, self.fs, self.twosf0, self.dbpf, 5) >= 0.5 or Numaverage(self.data1_trend["X_dbpf"]) >= 0.8):
+            if (get_VIB(self.data1, self.fs, self.rpm, "xampl")[0] / get_VIB(self.data1, self.fs, self.rpm,
+                                                                             "acc_rms") >= 0.4 or Numaverage(
+                    self.data1_trend["1倍频"]) >= 0.8):
                 sign_1 = 1
             else:
                 sign_1 = 0
 
         if self.data2:
-            if (get_HCR(self.data2, self.fs, self.twosf0, self.dbpf, 5) >= 0.5 or Numaverage(self.data2_trend["X_dbpf"]) >= 0.8):
+            if (get_VIB(self.data2, self.fs, self.rpm, "xampl")[0] / get_VIB(self.data2, self.fs, self.rpm,
+                                                                             "acc_rms") >= 0.4 or Numaverage(
+                    self.data2_trend["1倍频"]) >= 0.8):
                 sign_2 = 1
             else:
                 sign_2 = 0
 
         if self.data3:
-            if (get_HCR(self.data3, self.fs, self.twosf0, self.dbpf, 5) >= 0.5 or Numaverage(self.data3_trend["X_dbpf"]) >= 0.8):
+            if (get_VIB(self.data3, self.fs, self.rpm, "xampl")[0] / get_VIB(self.data3, self.fs, self.rpm,
+                                                                             "acc_rms") >= 0.4 or Numaverage(
+                    self.data3_trend["1倍频"]) >= 0.8):
                 sign_3 = 1
             else:
                 sign_3 = 0
 
         if self.data4:
-            if (get_HCR(self.data4, self.fs, self.twosf0, self.dbpf, 5) >= 0.5 or Numaverage(self.data4_trend["X_dbpf"]) >= 0.8):
+            if (get_VIB(self.data4, self.fs, self.rpm, "xampl")[0] / get_VIB(self.data4, self.fs, self.rpm,
+                                                                             "acc_rms") >= 0.4 or Numaverage(
+                    self.data4_trend["1倍频"]) >= 0.8):
                 sign_4 = 1
             else:
                 sign_4 = 0
@@ -236,30 +259,34 @@ class Bilengji_Dianji:
                         机理现象=str(conclusion_return.iloc[3]["机理现象"]),
                         机理原因=str(conclusion_return.iloc[3]["机理原因"]))
         else:
-            return "电机转子铜条没有松动或脱落"
+            return "电机转子平衡"
 
-    def zhuanzibupingheng(self):  # 5 转子不平衡
+    def zhouwaduizhongbuliang(self):  # 7 轴瓦对中不良
         sign_1, sign_2, sign_3, sign_4 = 0, 0, 0, 0
         if self.data1:
-            if (get_VIB(self.data1, self.fs, self.rpm, "xampl")[0] / get_VIB(self.data1, self.fs, self.rpm, "acc_rms") >= 0.4 or Numaverage(self.data1_trend["1倍频"]) >= 0.8):
+            if (get_VIB(self.data1, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
+                0] >= 1.0 or Numaverage(self.data1_trend["2倍频"]) >= 0.8):
                 sign_1 = 1
             else:
                 sign_1 = 0
 
         if self.data2:
-            if (get_VIB(self.data2, self.fs, self.rpm, "xampl")[0] / get_VIB(self.data2, self.fs, self.rpm, "acc_rms") >= 0.4 or Numaverage(self.data2_trend["1倍频"]) >= 0.8):
+            if (get_VIB(self.data2, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
+                0] >= 1.0 or Numaverage(self.data2_trend["2倍频"]) >= 0.8):
                 sign_2 = 1
             else:
                 sign_2 = 0
 
         if self.data3:
-            if (get_VIB(self.data3, self.fs, self.rpm, "xampl")[0] / get_VIB(self.data3, self.fs, self.rpm, "acc_rms") >= 0.4 or Numaverage(self.data3_trend["1倍频"]) >= 0.8):
+            if (get_VIB(self.data3, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data3, self.fs, self.rpm, "xampl")[
+                0] >= 1.0 or Numaverage(self.data3_trend["2倍频"]) >= 0.8):
                 sign_3 = 1
             else:
                 sign_3 = 0
 
         if self.data4:
-            if (get_VIB(self.data4, self.fs, self.rpm, "xampl")[0] / get_VIB(self.data4, self.fs, self.rpm, "acc_rms") >= 0.4 or Numaverage(self.data4_trend["1倍频"]) >= 0.8):
+            if (get_VIB(self.data4, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data4, self.fs, self.rpm, "xampl")[
+                0] >= 1.0 or Numaverage(self.data4_trend["2倍频"]) >= 0.8):
                 sign_4 = 1
             else:
                 sign_4 = 0
@@ -269,373 +296,656 @@ class Bilengji_Dianji:
                         机理现象=str(conclusion_return.iloc[4]["机理现象"]),
                         机理原因=str(conclusion_return.iloc[4]["机理原因"]))
         else:
-            return "电机转子平衡"
-
-    def zhouwaduizhongbuliang(self):  # 7 轴瓦对中不良
-        sign_1, sign_2, sign_3, sign_4 = 0, 0, 0, 0
-        if self.data1:
-            if (get_VIB(self.data1, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data1, self.fs, self.rpm, "xampl")[0] >= 1.0 or Numaverage(self.data1_trend["2倍频"]) >= 0.8):
-                sign_1 = 1
-            else:
-                sign_1 = 0
-
-        if self.data2:
-            if (get_VIB(self.data2, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data2, self.fs, self.rpm, "xampl")[0] >= 1.0 or Numaverage(self.data2_trend["2倍频"]) >= 0.8):
-                sign_2 = 1
-            else:
-                sign_2 = 0
-
-        if self.data3:
-            if (get_VIB(self.data3, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data3, self.fs, self.rpm, "xampl")[0] >= 1.0 or Numaverage(self.data3_trend["2倍频"]) >= 0.8):
-                sign_3 = 1
-            else:
-                sign_3 = 0
-
-        if self.data4:
-            if (get_VIB(self.data4, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data4, self.fs, self.rpm, "xampl")[0] >= 1.0 or Numaverage(self.data4_trend["2倍频"]) >= 0.8):
-                sign_4 = 1
-            else:
-                sign_4 = 0
-        sign = sign_1 + sign_2 + sign_3 + sign_4
-        if sign:
-            return dict(故障模式=str(conclusion_return.iloc[6]["故障模式"]),
-                        机理现象=str(conclusion_return.iloc[6]["机理现象"]),
-                        机理原因=str(conclusion_return.iloc[6]["机理原因"]))
-        else:
             return "轴瓦对中正常"
 
-    def zhuanzhourewanqu(self): # 8 转轴（热）弯曲  ###这里有轴向位置
-
-        sign_3, sign_4, sign_5 = 0, 0, 0
-
-        if self.data3:
-            if (get_VIB(self.data3, self.fs, self.rpm, "xampl")[0] / get_VIB(self.data3, self.fs, self.rpm, "acc_rms") >= 1.0 or Numaverage(self.data3_trend["1倍频"]) >= 0.8):
-                sign_3 = 1
-            else:
-                sign_3 = 0
-
-        if self.data4:
-            if (get_VIB(self.data4, self.fs, self.rpm, "xampl")[0] / get_VIB(self.data4, self.fs, self.rpm, "acc_rms") >= 1.0 or Numaverage(self.data4_trend["1倍频"]) >= 0.8):
-                sign_4 = 1
-            else:
-                sign_4 = 0
-
-        if self.data5:
-            if (get_VIB(self.data5, self.fs, self.rpm, "xampl")[0] / get_VIB(self.data5, self.fs, self.rpm,
-                                                                             "acc_rms") >= 1.0 or Numaverage(
-                    self.data5_trend["1倍频"]) >= 0.8):
-                sign_5 = 1
-            else:
-                sign_5 = 0
-
-        sign = sign_3 + sign_4 + sign_5
-
-        if (sign == 3):
-            return dict(故障模式=str(conclusion_return.iloc[7]["故障模式"]),
-                        机理现象=str(conclusion_return.iloc[7]["机理现象"]),
-                        机理原因=str(conclusion_return.iloc[7]["机理原因"]))
-        else:
-            return "转轴正常"
-
-    def xuanzhuanshisu(self):  # 11 旋转失速
+    def zhuanzibujiansongdong(self):  # 10 转子部件松动
         sign_1, sign_2, sign_3, sign_4 = 0, 0, 0, 0
         if self.data1:
-            if (get_HRS(self.data1, self.fs, frequency_low=9, frequency_high=999) / get_VIB(self.data1, self.fs, self.rpm, "acc_rms") >= 0.5 and Numaverage(self.data1_trend["HRS"]) >= 0.8 and get_VIB(self.data1, self.fs, self.rpm, "rms") >= 4.5):
+            if (get_VIB(self.data1, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
+                0]) and (Numaverage(self.data1_trend["HDS_1X"]) >= 0.8):
                 sign_1 = 1
             else:
                 sign_1 = 0
 
         if self.data2:
-            if (get_HRS(self.data2, self.fs, frequency_low=9, frequency_high=999) / get_VIB(self.data2, self.fs, self.rpm, "acc_rms") >= 0.5 and Numaverage(self.data2_trend["HRS"]) >= 0.8 and get_VIB(self.data2, self.fs, self.rpm, "rms") >= 4.5):
+            if (get_VIB(self.data2, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
+                0]) and (Numaverage(self.data2_trend["HDS_1X"]) >= 0.8):
                 sign_2 = 1
             else:
                 sign_2 = 0
 
         if self.data3:
-            if (get_HRS(self.data3, self.fs, frequency_low=9, frequency_high=999) / get_VIB(self.data3, self.fs, self.rpm, "acc_rms") >= 0.5 and Numaverage(self.data3_trend["HRS"]) >= 0.8 and get_VIB(self.data3, self.fs, self.rpm, "rms") >= 4.5):
+            if (get_VIB(self.data3, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data3, self.fs, self.rpm, "xampl")[
+                0]) and (Numaverage(self.data3_trend["HDS_1X"]) >= 0.8):
                 sign_3 = 1
             else:
                 sign_3 = 0
 
         if self.data4:
-            if (get_HRS(self.data4, self.fs, frequency_low=9, frequency_high=999) / get_VIB(self.data4, self.fs, self.rpm, "acc_rms") >= 0.5 and Numaverage(self.data4_trend["HRS"]) >= 0.8 and get_VIB(self.data4, self.fs, self.rpm, "rms") >= 4.5):
+            if (get_VIB(self.data4, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data4, self.fs, self.rpm, "xampl")[
+                0]) and (Numaverage(self.data4_trend["HDS_1X"]) >= 0.8):
                 sign_4 = 1
             else:
                 sign_4 = 0
         sign = sign_1 + sign_2 + sign_3 + sign_4
         if sign:
-            return dict(故障模式=str(conclusion_return.iloc[9]["故障模式"]),
+            return dict(故障模式=str(conclusion_return.iloc[5]["故障模式"]),
+                        机理现象=str(conclusion_return.iloc[5]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[5]["机理原因"]))
+        else:
+            return "转子部件没有松动"
+
+    def zhouchengguzhang(self):
+        '''电机中轴承故障，包括：内圈、外圈、滚动体、保持架和不对中物种故障
+            规则来源：旋转设备机理模型（三版2021105）.xlsx
+            1，轴承内圈故障："HS(水平，BPFI，5）/overall(水平）>0.4 && speedall(水平）>4.5 || HS(竖直，BPFI，5）/overall(竖直）>0.4 && speedall(竖直）>4.5”
+            2，轴承外圈故障："HS(水平，BPFO，5）/overall(水平）>0.4 && speedall(水平）>4.5 || HS(竖直，BPFO，5）/overall(竖直）>0.4 && speedall(竖直）>4.5 "
+            3，轴承滚动体故障："HS(水平，BSF，5）/overall(水平）>0.4 && speedall(水平）>4.5 || HS(竖直，BSF，5）/overall(竖直）>0.4 && speedall(竖直）>4.5 "
+            4，轴承保持架故障："HS(水平，FTF，5）/overall(水平）>0.4 && speedall(水平）>4.5 || HS(竖直，FTF，5）/overall(竖直）>0.4 && speedall(竖直）>4.5"
+            5，"HS(水平，二倍频，1）/overall(水平1）>0.4  && speedall(水平1）>4.5|| HS(竖直，二倍频，1）/overall(竖直1）>0.4  && speedall(竖直1）>4.5 "
+
+        '''
+
+        if self.data1 or self.data2:
+            if (get_HS(self.data1, self.fs, self.bbf["BPFI"], 5) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data1, self.fs, self.rpm, "rms") > 4.5) or \
+                (get_HS(self.data2, self.fs, self.bbf["BPFI"], 5) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
+                1]> 0.4 and get_VIB(self.data2, self.fs, self.rpm, "rms") > 4.5):
+                return dict(故障模式=str(conclusion_return.iloc[6]["故障模式"]),
+                        机理现象=str(conclusion_return.iloc[6]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[6]["机理原因"]))
+
+        if self.data1 or self.data2:
+            if (get_HS(self.data1, self.fs, self.bbf["BPFO"], 5) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data1, self.fs, self.rpm, "rms") > 4.5) or \
+                    (get_HS(self.data2, self.fs, self.bbf["BPFO"], 5) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "rms") > 4.5):
+                return dict(故障模式=str(conclusion_return.iloc[7]["故障模式"]),
+                        机理现象=str(conclusion_return.iloc[7]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[7]["机理原因"]))
+
+        if self.data1 or self.data2:
+            if (get_HS(self.data1, self.fs, self.bbf["BSF"], 5) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "rms") > 4.5) or \
+                    (get_HS(self.data1, self.fs, self.bbf["BSF"], 5) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "rms") > 4.5):
+                return dict(故障模式=str(conclusion_return.iloc[8]["故障模式"]),
+                        机理现象=str(conclusion_return.iloc[8]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[8]["机理原因"]))
+
+        if self.data1 or self.data2:
+            if (get_HS(self.data1, self.fs, self.bbf["FTF"], 5) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "rms") > 4.5) or \
+                    (get_HS(self.data2, self.fs, self.bbf["FTF"], 5) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "rms") > 4.5):
+                return dict(故障模式=str(conclusion_return.iloc[9]["故障模式"]),
                         机理现象=str(conclusion_return.iloc[9]["机理现象"]),
                         机理原因=str(conclusion_return.iloc[9]["机理原因"]))
-        else:
-            return "旋转速度正常"
+
+        if self.data1 or self.data2:
+            if (get_HS(self.data1, self.fs, self.X_1*2, 1) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data1, self.fs, self.rpm, "rms") > 4.5) or \
+                    (get_HS(self.data2, self.fs, self.X_1*2, 1) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm,  "rms") > 4.5):
+                return dict(故障模式=str(conclusion_return.iloc[10]["故障模式"]),
+                        机理现象=str(conclusion_return.iloc[10]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[10]["机理原因"]))
 
 
-    def qishihuodongjingganshe(self):  # 汽蚀（或动静干涉）
-        sign_1, sign_2 = 0, 0
+class Bilengji_Fengji:
+
+    def __int__(self, json1, alarm_message, trend_data):
+        self.point_data = json1["point_data"]
+        self.point_info = json1['points_info']
+        self.alarm_channel1 = alarm_message["电机"][0]  # 风机驱动端水平
+        self.alarm_channel2 = alarm_message["电机"][1]  # 风机驱动端竖直
+        self.alarm_channel3 = alarm_message["电机"][2]  # 风机非驱端水平
+        self.alarm_channel4 = alarm_message["电机"][3]  # 风机非驱端竖直
+
+        self.data1 = self.point_data[self.alarm_channel1]['vel_data']['value']  #
+        self.frequency_1 = self.point_info[self.alarm_channel1]['sn_info']['hz']
+        self.data2 = self.point_data[self.alarm_channel2]['vel_data']['value']
+        self.frequency_2 = self.point_info[self.alarm_channel2]['sn_info']['hz']
+        self.data3 = self.point_data[self.alarm_channel3]['vel_data']['value']  #
+        self.frequency_3 = self.point_info[self.alarm_channel3]['sn_info']['hz']
+        self.data4 = self.point_data[self.alarm_channel4]['vel_data']['value']
+        self.frequency_4 = self.point_info[self.alarm_channel4]['sn_info']['hz']
+
+        self.data1_trend = trend_data[alarm_message["风机"][0]]
+        self.data2_trend = trend_data[alarm_message["风机"][1]]
+        self.data3_trend = trend_data[alarm_message["风机"][2]]
+        self.data4_trend = trend_data[alarm_message["风机"][3]]
+
+        self.twosf0 = json1["twosf0"]  # 旋转磁场超越转子速度[f0/P- (1-s)f0/P] ×2P= 2sf0。
+        self.fs = json1["fs"]  # 采样频率
+        self.rpm = json1["rpm"]["转速"]  #
+        self.X_1 = self.rpm / 60  # 一倍频
+
+        self.bbf = json1["bbf"] # 轴承故障频率 ["BPFI": BPFI, "BPFO": BPFO, "BSF": BSF, "FTF": FTF]
+
+    def bupingheng(self):
+        '''不平衡故障
+        "HS(水平1，一倍频幅值，1）/overall(水平1）>0.4  && speedall(水平1）>4.5||
+        HS(竖直1，一倍频幅值，1）/overall(竖直1）>0.4  && speedall(竖直1）>4.5||
+        HS(水平2，一倍频幅值，1）/overall(水平2）>0.4  && speedall(水平2）>4.5||
+        HS(竖直2，一倍频幅值，1）/overall(竖直2）>0.4  && speedall(竖直2）>4.5"
+        '''
+
+        sign_1, sign_2, sign_3, sign_4 = 0, 0, 0, 0
+
         if self.data1:
-            if (amplitude(self.data1, self.fs, self.bpf) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[0] >= 1.0 or Numaverage(self.data1_trend["bpf"]) >= 0.8 or amplitude(self.data1, self.fs, self.dbpf) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[0] >= 1.0 or Numaverage(self.data1_trend["dbpf"]) >= 0.8):
+            if (get_HS(self.data1, self.fs, self.X_1, 1) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[1] > 0.4 and get_VIB(self.data1, self.fs, self.rpm, "rms") > 4.5):
                 sign_1 = 1
             else:
                 sign_1 = 0
 
         if self.data2:
-            if (amplitude(self.data2, self.fs, self.bpf) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[0] >= 1.0 or Numaverage(self.data2_trend["bpf"]) >= 0.8 or amplitude(self.data2, self.fs,self.dbpf) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[0] >= 1.0 or Numaverage(self.data1_trend["dbpf"]) >= 0.8):
+            if (get_HS(self.data2, self.fs, self.X_1, 1) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "rms") > 4.5):
+                sign_2 = 1
+            else:
+                sign_2 = 0
+
+        if self.data3:
+            if (get_HS(self.data3, self.fs, self.X_1, 1) / get_VIB(self.data3, self.fs, self.rpm, "xampl")[1] > 0.4 and get_VIB(self.data3, self.fs, self.rpm, "rms") > 4.5):
+                sign_3 = 1
+            else:
+                sign_3 = 0
+
+        if self.data4:
+            if (get_HS(self.data4, self.fs, self.X_1, 1) / get_VIB(self.data4, self.fs, self.rpm, "xampl")[1] > 0.4 and get_VIB(self.data4, self.fs, self.rpm, "rms") > 4.5):
+                sign_4 = 1
+            else:
+                sign_4 = 0
+
+        sign = sign_1 + sign_2 + sign_3 + sign_4
+        if sign:
+            return dict(故障模式=str(conclusion_return.iloc[11]["故障模式"]),   # 机理模型读入新的的表格
+                        机理现象=str(conclusion_return.iloc[11]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[11]["机理原因"]))
+        else:
+            return "风机转子平衡"
+
+    def zhuanzibuduizhong(self):
+        '''不对中故障
+        "HS(水平1，二倍频幅值，1）/overall(水平1）>0.4  && speedall(水平1）>4.5||
+        HS(竖直1，二倍频幅值，1）/overall(竖直1）>0.4  && speedall(竖直1）>4.5||
+        HS(水平2，二倍频幅值，1）/overall(水平2）>0.4  && speedall(水平2）>4.5||
+        HS(竖直2，二倍频幅值，1）/overall(竖直2）>0.4  && speedall(竖直2）>4.5"
+
+        '''
+        sign_1, sign_2, sign_3, sign_4 = 0, 0, 0, 0
+
+        if self.data1:
+            if (get_HS(self.data1, self.fs, self.X_1*2, 1) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data1, self.fs, self.rpm, "rms") > 4.5):
+                sign_1 = 1
+            else:
+                sign_1 = 0
+
+        if self.data2:
+            if (get_HS(self.data2, self.fs, self.X_1*2, 1) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "rms") > 4.5):
+                sign_2 = 1
+            else:
+                sign_2 = 0
+
+        if self.data3:
+            if (get_HS(self.data3, self.fs, self.X_1*2, 1) / get_VIB(self.data3, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data3, self.fs, self.rpm, "rms") > 4.5):
+                sign_3 = 1
+            else:
+                sign_3 = 0
+
+        if self.data4:
+            if (get_HS(self.data4, self.fs, self.X_1*2, 1) / get_VIB(self.data4, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data4, self.fs, self.rpm, "rms") > 4.5):
+                sign_4 = 1
+            else:
+                sign_4 = 0
+
+        sign = sign_1 + sign_2 + sign_3 + sign_4
+        if sign:
+            return dict(故障模式=str(conclusion_return.iloc[12]["故障模式"]),  # 机理模型读入新的的表格
+                        机理现象=str(conclusion_return.iloc[12]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[12]["机理原因"]))
+        else:
+            return "风机转子对中"
+
+    def zhouchengguzhang(self):
+        '''电机中轴承故障，包括：内圈、外圈、滚动体、保持架和不对中物种故障
+            规则来源：旋转设备机理模型（三版2021105）.xlsx
+            1，轴承内圈故障："HS(水平，BPFI，5）/overall(水平）>0.4 && speedall(水平）>4.5 || HS(竖直，BPFI，5）/overall(竖直）>0.4 && speedall(竖直）>4.5”
+            2，轴承外圈故障："HS(水平，BPFO，5）/overall(水平）>0.4 && speedall(水平）>4.5 || HS(竖直，BPFO，5）/overall(竖直）>0.4 && speedall(竖直）>4.5 "
+            3，轴承滚动体故障："HS(水平，BSF，5）/overall(水平）>0.4 && speedall(水平）>4.5 || HS(竖直，BSF，5）/overall(竖直）>0.4 && speedall(竖直）>4.5 "
+            4，轴承保持架故障："HS(水平，FTF，5）/overall(水平）>0.4 && speedall(水平）>4.5 || HS(竖直，FTF，5）/overall(竖直）>0.4 && speedall(竖直）>4.5"
+            5，"HS(水平，二倍频，1）/overall(水平1）>0.4  && speedall(水平1）>4.5|| HS(竖直，二倍频，1）/overall(竖直1）>0.4  && speedall(竖直1）>4.5 "
+
+        '''
+
+        if self.data1 or self.data2:
+            if (get_HS(self.data1, self.fs, self.bbf["BPFI"], 5) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data1, self.fs, self.rpm, "impulse") > 3) or \
+                (get_HS(self.data2, self.fs, self.bbf["BPFI"], 5) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
+                1]> 0.4 and get_VIB(self.data2, self.fs, self.rpm, "impulse") > 3):
+                return dict(故障模式=str(conclusion_return.iloc[6]["故障模式"]),
+                        机理现象=str(conclusion_return.iloc[6]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[6]["机理原因"]))
+
+        if self.data1 or self.data2:
+            if (get_HS(self.data1, self.fs, self.bbf["BPFO"], 5) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data1, self.fs, self.rpm, "impulse") > 3) or \
+                    (get_HS(self.data2, self.fs, self.bbf["BPFO"], 5) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "impulse") > 3):
+                return dict(故障模式=str(conclusion_return.iloc[7]["故障模式"]),
+                        机理现象=str(conclusion_return.iloc[7]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[7]["机理原因"]))
+
+        if self.data1 or self.data2:
+            if (get_HS(self.data1, self.fs, self.bbf["BSF"], 5) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "impulse") > 3) or \
+                    (get_HS(self.data1, self.fs, self.bbf["BSF"], 5) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm,"impulse") > 3):
+                return dict(故障模式=str(conclusion_return.iloc[8]["故障模式"]),
+                        机理现象=str(conclusion_return.iloc[8]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[8]["机理原因"]))
+
+        if self.data1 or self.data2:
+            if (get_HS(self.data1, self.fs, self.bbf["FTF"], 5) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "impulse") > 3) or \
+                    (get_HS(self.data2, self.fs, self.bbf["FTF"], 5) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "impulse") > 3):
+                return dict(故障模式=str(conclusion_return.iloc[9]["故障模式"]),
+                        机理现象=str(conclusion_return.iloc[9]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[9]["机理原因"]))
+
+        if self.data1 or self.data2:
+            if (get_HS(self.data1, self.fs, self.X_1*2, 1) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data1, self.fs, self.rpm, "rms") > 4.5) or \
+                    (get_HS(self.data2, self.fs, self.X_1*2, 1) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm,  "rms") > 4.5):
+                return dict(故障模式=str(conclusion_return.iloc[10]["故障模式"]),
+                        机理现象=str(conclusion_return.iloc[10]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[10]["机理原因"]))
+
+
+class Gearbox:
+
+    def __int__(self, json1, alarm_message, trend_data):
+        self.point_data = json1["point_data"]
+        self.point_info = json1['points_info']
+        self.alarm_channel1 = alarm_message["齿轮箱"][0]  # 齿轮驱动端水平
+        self.alarm_channel2 = alarm_message["齿轮箱"][1]  # 齿轮驱动端竖直
+
+
+        self.data1 = self.point_data[self.alarm_channel1]['vel_data']['value']  #
+        self.frequency_1 = self.point_info[self.alarm_channel1]['sn_info']['hz']
+        self.data2 = self.point_data[self.alarm_channel2]['vel_data']['value']
+        self.frequency_2 = self.point_info[self.alarm_channel2]['sn_info']['hz']
+
+
+        self.data1_trend = trend_data[alarm_message["齿轮箱"][0]]
+        self.data2_trend = trend_data[alarm_message["齿轮箱"][1]]
+
+
+        self.fs = json1["fs"]  # 采样频率
+        self.rpm = json1["rpm"]["转速"]  #
+        self.X_1 = self.rpm / 60  # 一倍频
+        self.GMF = json1["GMF"] # 齿轮啮合频率
+
+        self.bbf = json1["bbf"] # 轴承故障频率 ["BPFI": BPFI, "BPFO": BPFO, "BSF": BSF, "FTF": FTF]
+
+    def cilunbupingheng(self):
+        '''齿轮不平衡
+        "HCR(水平，1X，GMF，5）>0.4  && speedall(水平1）>4.5 && HS(水平，1X，5）/overall(水平）>0.4 ||
+         HCR(水平，1X，GMF，5）>0.4  && speedall(竖直1）>4.5 &&  HS(竖直，1X，5）/overall(竖直）>0.4 "
+        '''
+        sign_1, sign_2 = 0, 0
+        if self.data1:
+            if get_HS(self.data1, self.fs, self.X_1, 5) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[1] > 0.4 and get_VIB(self.data1, self.fs, self.rpm, "rms") > 4.5 and get_HCR(self.data1, self.fs, self.X_1, self.GMF, 5) >= 0.4 :
+                sign_1 = 1
+            else:
+                sign_1 = 0
+
+        if self.data2:
+            if get_HS(self.data2, self.fs, self.X_1, 5) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "rms") > 4.5 and get_HCR(self.data2, self.fs, self.X_1, self.GMF, 5) >= 0.4 :
                 sign_2 = 1
             else:
                 sign_2 = 0
 
         sign = sign_1 + sign_2
-        if sign:
-            return dict(故障模式=str(conclusion_return.iloc[10]["故障模式"]),
-                        机理现象=str(conclusion_return.iloc[10]["机理现象"]),
-                        机理原因=str(conclusion_return.iloc[10]["机理原因"]))
-        else:
-            return "电机没有汽蚀（或动静干涉）"
 
-    def dongjingbujianmoca(self):  # 9 动静部件摩擦
-        sign_1, sign_2, sign_3, sign_4 = 0, 0, 0, 0
+        if sign:
+            return dict(故障模式=str(conclusion_return.iloc[15]["故障模式"]),  # 机理模型读入新的的表格
+                        机理现象=str(conclusion_return.iloc[15]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[15]["机理原因"]))
+        else:
+            return "齿轮平衡"
+
+    def cilunbutongzhou(self):
+        '''齿轮不同轴
+        "HCR(水平，1X，GMF，5）>0.4  && speedall(水平1）>4.5 && HS(水平，1X，5）/overall(水平）>0.4 ||
+        HCR(竖直，1X，GMF，5）>0.4  && speedall(竖直1）>4.5 &&  HS(竖直，1X，5）/overall(竖直）>0.4 "
+        '''
+        sign_1, sign_2 = 0, 0
         if self.data1:
-            if (Numaverage(self.data1_trend["HS_1X"]) >= 0.8) or (Numaverage(self.data1_trend["HDS_1X"]) >= 0.8):
+            if get_HCR(self.data1, self.fs,self.X_1, self.GMF, 5) > 0.4 and get_VIB(self.data1, self.fs, self.rpm, "rms") > 4.5 and get_HS(self.data1, self.fs, self.X_1, 5) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[1] > 0.4 :
                 sign_1 = 1
             else:
                 sign_1 = 0
 
         if self.data2:
-            if (Numaverage(self.data2_trend["HS_1X"]) >= 0.8) or (Numaverage(self.data2_trend["HDS_1X"]) >= 0.8):
+            if get_HCR(self.data2, self.fs,self.X_1, self.GMF,5) >= 0.4 and get_VIB(self.data2, self.fs, self.rpm, "rms") > 4.5 and get_HS(self.data2, self.fs, self.X_1, 5) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[1] > 0.4 :
+                sign_2 = 1
+            else:
+                sign_2 = 0
+
+        sign = sign_1 + sign_2
+
+        if sign:
+            return dict(故障模式=str(conclusion_return.iloc[15]["故障模式"]),  # 机理模型读入新的的表格
+                        机理现象=str(conclusion_return.iloc[15]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[15]["机理原因"]))
+        else:
+            return "齿轮同轴"
+
+    def chimianmoshun(self):
+        '''齿面磨损
+        "HS(水平，1X，5）/overall(水平）>0.4 && speedall(水平）>4.5 && HCR(水平，1X，GMF，1）>0.4 ||
+        HS(竖直，1X，5）/overall(竖直）>0.4 && speedall(竖直）>4.5 &&  HCR(竖直，1X，GMF，1）>0.4 "
+        '''
+
+        sign_1, sign_2 = 0, 0
+        if self.data1:
+            if get_HCR(self.data1, self.fs, self.X_1, self.GMF, 1) > 0.4 and get_VIB(self.data1, self.fs, self.rpm,
+                                                                                     "rms") > 4.5 and get_HS(self.data1,
+                                                                                                             self.fs,
+                                                                                                             self.X_1, 5) / \
+                    get_VIB(self.data1, self.fs, self.rpm, "xampl")[1] > 0.4:
+                sign_1 = 1
+            else:
+                sign_1 = 0
+
+        if self.data2:
+            if get_HCR(self.data2, self.fs, self.X_1, self.GMF, 1) >= 0.4 and get_VIB(self.data2, self.fs, self.rpm,
+                                                                                      "rms") > 4.5 and get_HS(self.data2,
+                                                                                                              self.fs,
+                                                                                                              self.X_1, 5) / \
+                    get_VIB(self.data2, self.fs, self.rpm, "xampl")[1] > 0.4:
+                sign_2 = 1
+            else:
+                sign_2 = 0
+
+        sign = sign_1 + sign_2
+
+        if sign:
+            return dict(故障模式=str(conclusion_return.iloc[15]["故障模式"]),  # 机理模型读入新的的表格
+                        机理现象=str(conclusion_return.iloc[15]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[15]["机理原因"]))
+        else:
+            return "齿轮没有齿面磨损"
+
+    def zhouchengguzhang(self):
+        '''轴承故障，包括：内圈、外圈、滚动体、保持架和不对中物种故障
+            规则来源：旋转设备机理模型（三版2021105）.xlsx
+            1，轴承内圈故障："HS(水平，BPFI，5）/overall(水平）>0.4 && speedall(水平）>4.5 || HS(竖直，BPFI，5）/overall(竖直）>0.4 && speedall(竖直）>4.5”
+            2，轴承外圈故障："HS(水平，BPFO，5）/overall(水平）>0.4 && speedall(水平）>4.5 || HS(竖直，BPFO，5）/overall(竖直）>0.4 && speedall(竖直）>4.5 "
+            3，轴承滚动体故障："HS(水平，BSF，5）/overall(水平）>0.4 && speedall(水平）>4.5 || HS(竖直，BSF，5）/overall(竖直）>0.4 && speedall(竖直）>4.5 "
+            4，轴承保持架故障："HS(水平，FTF，5）/overall(水平）>0.4 && speedall(水平）>4.5 || HS(竖直，FTF，5）/overall(竖直）>0.4 && speedall(竖直）>4.5"
+            5，"HS(水平，二倍频，1）/overall(水平1）>0.4  && speedall(水平1）>4.5|| HS(竖直，二倍频，1）/overall(竖直1）>0.4  && speedall(竖直1）>4.5 "
+
+        '''
+
+        if self.data1 or self.data2:
+            if (get_HS(self.data1, self.fs, self.bbf["BPFI"], 5) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data1, self.fs, self.rpm, "impulse") > 3) or \
+                (get_HS(self.data2, self.fs, self.bbf["BPFI"], 5) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
+                1]> 0.4 and get_VIB(self.data2, self.fs, self.rpm, "impulse") > 3):
+                return dict(故障模式=str("轴承内圈故障"),
+                        机理现象=str("轴承座径向振动大，轴承温度升高"),
+                        机理原因=str("磨损擦伤、点蚀、疲劳剥落；润滑油脂乳化、结块、含有杂质等引起的理化指标下降；轴承处于贫油状态等"))
+
+        if self.data1 or self.data2:
+            if (get_HS(self.data1, self.fs, self.bbf["BPFO"], 5) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data1, self.fs, self.rpm, "impulse") > 3) or \
+                    (get_HS(self.data2, self.fs, self.bbf["BPFO"], 5) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "impulse") > 3):
+                return dict(故障模式=str("轴承外圈故障"),
+                            机理现象=str("轴承座径向振动大，轴承温度升高"),
+                            机理原因=str(
+                                "磨损擦伤、点蚀、疲劳剥落；润滑油脂乳化、结块、含有杂质等引起的理化指标下降；轴承处于贫油状态等"))
+
+        if self.data1 or self.data2:
+            if (get_HS(self.data1, self.fs, self.bbf["BSF"], 5) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "impulse") > 3) or \
+                    (get_HS(self.data1, self.fs, self.bbf["BSF"], 5) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm,"impulse") > 3):
+                return dict(故障模式=str("轴承外圈故障"),
+                            机理现象=str("轴承座径向振动大，轴承温度升高"),
+                            机理原因=str(
+                                "磨损擦伤、点蚀、疲劳剥落；润滑油脂乳化、结块、含有杂质等引起的理化指标下降；轴承处于贫油状态等"))
+
+        if self.data1 or self.data2:
+            if (get_HS(self.data1, self.fs, self.bbf["FTF"], 5) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "impulse") > 3) or \
+                    (get_HS(self.data2, self.fs, self.bbf["FTF"], 5) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "impulse") > 3):
+                return dict(故障模式=str("轴承滚动体故障"),
+                            机理现象=str("轴承座径向振动大，轴承温度升高"),
+                            机理原因=str(
+                                "磨损擦伤、点蚀、疲劳剥落；润滑油脂乳化、结块、含有杂质等引起的理化指标下降；轴承处于贫油状态等"))
+
+        if self.data1 or self.data2:
+            if (get_HS(self.data1, self.fs, self.bbf["FTF"], 5) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data1, self.fs, self.rpm,"impulse") > 3) or \
+                    (get_HS(self.data2, self.fs, self.bbf["FTF"], 5) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "impulse") > 3):
+                return dict(故障模式=str("轴承保持架故障"),
+                            机理现象=str("轴承座径向振动大，轴承温度升高"),
+                            机理原因=str(
+                                "磨损擦伤、点蚀、疲劳剥落；润滑油脂乳化、结块、含有杂质等引起的理化指标下降；轴承处于贫油状态等"))
+
+        if self.data1 or self.data2:
+            if (get_HS(self.data1, self.fs, self.X_1*2, 1) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data1, self.fs, self.rpm, "rms") > 4.5) or \
+                    (get_HS(self.data2, self.fs, self.X_1*2, 1) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm,  "rms") > 4.5):
+                return dict(故障模式=str("轴承不对中"),
+                            机理现象=str("轴承座径向振动大，轴承温度升高"),
+                            机理原因=str(
+                                "轴承座标高和轴中心位置偏差，安装误差、轴承座松动、安装不牢靠"))
+
+
+class Fengji:
+    def __int__(self, json1, alarm_message, trend_data):
+        self.point_data = json1["point_data"]
+        self.point_info = json1['points_info']
+        self.alarm_channel1 = alarm_message["风机"][0]  # 风机驱动端水平 或轴承端水平
+        self.alarm_channel2 = alarm_message["风机"][1]  # 风机驱动端竖直 或轴承端竖直
+        self.alarm_channel3 = alarm_message["风机"][2]  # 风机非驱端水平
+        self.alarm_channel4 = alarm_message["风机"][3]  # 风机非驱端竖直
+
+
+
+        self.data1 = self.point_data[self.alarm_channel1]['vel_data']['value']  #
+        self.frequency_1 = self.point_info[self.alarm_channel1]['sn_info']['hz']
+        self.data2 = self.point_data[self.alarm_channel2]['vel_data']['value']
+        self.frequency_2 = self.point_info[self.alarm_channel2]['sn_info']['hz']
+        self.data3 = self.point_data[self.alarm_channel3]['vel_data']['value']  #
+        self.frequency_3 = self.point_info[self.alarm_channel3]['sn_info']['hz']
+        self.data4 = self.point_data[self.alarm_channel4]['vel_data']['value']
+        self.frequency_4 = self.point_info[self.alarm_channel4]['sn_info']['hz']
+
+
+
+
+        self.data1_trend = trend_data[alarm_message["风机"][0]]
+        self.data2_trend = trend_data[alarm_message["风机"][1]]
+        self.data3_trend = trend_data[alarm_message["风机"][2]]
+        self.data4_trend = trend_data[alarm_message["风机"][3]]
+
+        self.fs = json1["fs"]  # 采样频率
+        self.rpm = json1["rpm"]["转速"]  #
+        self.X_1 = self.rpm / 60  # 一倍频
+        self.GMF = json1["GMF"] # 齿轮啮合频率
+
+        self.bbf = json1["bbf"] # 轴承故障频率 ["BPFI": BPFI, "BPFO": BPFO, "BSF": BSF, "FTF": FTF]
+
+    def bupingheng(self):
+        '''不平衡故障
+        "HS(水平1，一倍频幅值，1）/overall(水平1）>0.4  && speedall(水平1）>4.5||
+        HS(竖直1，一倍频幅值，1）/overall(竖直1）>0.4  && speedall(竖直1）>4.5||
+        HS(水平2，一倍频幅值，1）/overall(水平2）>0.4  && speedall(水平2）>4.5||
+        HS(竖直2，一倍频幅值，1）/overall(竖直2）>0.4  && speedall(竖直2）>4.5"
+        '''
+
+        sign_1, sign_2, sign_3, sign_4 = 0, 0, 0, 0
+
+        if self.data1:
+            if (get_HS(self.data1, self.fs, self.X_1, 1) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data1, self.fs, self.rpm, "rms") > 4.5):
+                sign_1 = 1
+            else:
+                sign_1 = 0
+
+        if self.data2:
+            if (get_HS(self.data2, self.fs, self.X_1, 1) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "rms") > 4.5):
                 sign_2 = 1
             else:
                 sign_2 = 0
 
         if self.data3:
-            if (Numaverage(self.data3_trend["HS_1X"]) >= 0.8) or (Numaverage(self.data3_trend["HDS_1X"]) >= 0.8):
+            if (get_HS(self.data3, self.fs, self.X_1, 1) / get_VIB(self.data3, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data3, self.fs, self.rpm, "rms") > 4.5):
                 sign_3 = 1
             else:
                 sign_3 = 0
 
         if self.data4:
-            if (Numaverage(self.data4_trend["HS_1X"]) >= 0.8) or (Numaverage(self.data4_trend["HDS_1X"]) >= 0.8):
+            if (get_HS(self.data4, self.fs, self.X_1, 1) / get_VIB(self.data4, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data4, self.fs, self.rpm, "rms") > 4.5):
                 sign_4 = 1
             else:
                 sign_4 = 0
+
         sign = sign_1 + sign_2 + sign_3 + sign_4
         if sign:
             return dict(故障模式=str(conclusion_return.iloc[11]["故障模式"]),
                         机理现象=str(conclusion_return.iloc[11]["机理现象"]),
                         机理原因=str(conclusion_return.iloc[11]["机理原因"]))
         else:
-            return "动静部件摩擦正常"
+            return "转子平衡"
 
+    def zhuanzibuduizhong(self):
+        '''不对中故障
+        "HS(水平1，二倍频幅值，1）/overall(水平1）>0.4  && speedall(水平1）>4.5||
+        HS(竖直1，二倍频幅值，1）/overall(竖直1）>0.4  && speedall(竖直1）>4.5||
+        HS(水平2，二倍频幅值，1）/overall(水平2）>0.4  && speedall(水平2）>4.5||
+        HS(竖直2，二倍频幅值，1）/overall(竖直2）>0.4  && speedall(竖直2）>4.5"
 
-    def zhuanzibujiansongdong(self):  # 10 转子部件松动
+        '''
         sign_1, sign_2, sign_3, sign_4 = 0, 0, 0, 0
+
         if self.data1:
-            if (get_VIB(self.data1, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data1, self.fs, self.rpm, "xampl")[0]) and (Numaverage(self.data1_trend["HDS_1X"]) >= 0.8):
+            if (get_HS(self.data1, self.fs, self.X_1*2, 1) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data1, self.fs, self.rpm, "rms") > 4.5):
                 sign_1 = 1
             else:
                 sign_1 = 0
 
         if self.data2:
-            if (get_VIB(self.data2, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data2, self.fs, self.rpm, "xampl")[0]) and (Numaverage(self.data2_trend["HDS_1X"]) >= 0.8):
+            if (get_HS(self.data2, self.fs, self.X_1*2, 1) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data2, self.fs, self.rpm, "rms") > 4.5):
                 sign_2 = 1
             else:
                 sign_2 = 0
 
         if self.data3:
-            if (get_VIB(self.data3, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data3, self.fs, self.rpm, "xampl")[0]) and (Numaverage(self.data3_trend["HDS_1X"]) >= 0.8):
+            if (get_HS(self.data3, self.fs, self.X_1*2, 1) / get_VIB(self.data3, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data3, self.fs, self.rpm, "rms") > 4.5):
                 sign_3 = 1
             else:
                 sign_3 = 0
 
         if self.data4:
-            if (get_VIB(self.data4, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data4, self.fs, self.rpm, "xampl")[0]) and (Numaverage(self.data4_trend["HDS_1X"]) >= 0.8):
+            if (get_HS(self.data4, self.fs, self.X_1*2, 1) / get_VIB(self.data4, self.fs, self.rpm, "xampl")[
+                1] > 0.4 and get_VIB(self.data4, self.fs, self.rpm, "rms") > 4.5):
                 sign_4 = 1
             else:
                 sign_4 = 0
+
         sign = sign_1 + sign_2 + sign_3 + sign_4
         if sign:
             return dict(故障模式=str(conclusion_return.iloc[12]["故障模式"]),
                         机理现象=str(conclusion_return.iloc[12]["机理现象"]),
                         机理原因=str(conclusion_return.iloc[12]["机理原因"]))
         else:
-            return "转子部件没有松动"
+            return "转子对中"
 
-    def zhuanzizhichengbujiansongdong(self):  # 13 转子支承部件松动
-        sign_1, sign_2, sign_3, sign_4 = 0, 0, 0, 0
+    def youmowodong(self):
+        '''油膜涡动
+        "HS(水平，0.41X-0.48X，5）/overall(水平）>0.4 && speedall(水平）>4.5 ||
+        HS(竖直，0.41X-0.48X，5）/overall(竖直）>0.4 && speedall(竖直）>4.5"
+
+        '''
+        sign_1, sign_2 = 0, 0
         if self.data1:
-            if (Numaverage(self.data1_trend["HS_1X"]) >= 0.8) and (Numaverage(self.data1_trend["HDS_1X"]) >= 0.8) and get_VIB(self.data1, self.fs, self.rpm, "rms"):
+            if (get_HS(self.data1, self.fs, self.X_1*0.45, 5) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[1] > 0.4) and get_VIB(self.data1, self.fs, self.rpm, "rms") > 4.5 :  # 分频的计算方式可以再优化
                 sign_1 = 1
             else:
                 sign_1 = 0
 
         if self.data2:
-            if (Numaverage(self.data2_trend["HS_1X"]) >= 0.8) and (Numaverage(self.data2_trend["HDS_1X"]) >= 0.8) and get_VIB(self.data2, self.fs, self.rpm, "rms"):
+            if (get_HS(self.data2, self.fs, self.X_1*0.45, 5) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[1] > 0.4) and get_VIB(self.data2, self.fs, self.rpm, "rms") > 4.5 :  # 分频的计算方式可以再优化
                 sign_2 = 1
             else:
                 sign_2 = 0
 
-        if self.data3:
-            if (Numaverage(self.data3_trend["HS_1X"]) >= 0.8) and (Numaverage(self.data3_trend["HDS_1X"]) >= 0.8) and get_VIB(self.data3, self.fs, self.rpm, "rms"):
-                sign_3 = 1
-            else:
-                sign_3 = 0
+        sign =  sign_1 + sign_2
 
-        if self.data4:
-            if (Numaverage(self.data4_trend["HS_1X"]) >= 0.8) and (Numaverage(self.data4_trend["HDS_1X"]) >= 0.8) and get_VIB(self.data4, self.fs, self.rpm, "rms"):
-                sign_4 = 1
-            else:
-                sign_4 = 0
-        sign = sign_1 + sign_2 + sign_3 + sign_4
         if sign:
             return dict(故障模式=str(conclusion_return.iloc[13]["故障模式"]),
                         机理现象=str(conclusion_return.iloc[13]["机理现象"]),
                         机理原因=str(conclusion_return.iloc[13]["机理原因"]))
         else:
-            return "转子支承部件没有松动"
+            return "没有油膜涡动"
 
-
-    def zhuanzibujianliewen(self):  # 14 转子部件裂纹
+    def zhouwaduizhongbuliang(self):  # 7 轴瓦对中不良
         sign_1, sign_2, sign_3, sign_4 = 0, 0, 0, 0
         if self.data1:
-            if (get_VIB(self.data1, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data1, self.fs, self.rpm, "xampl")[0] >= 1.0) and (Numaverage(self.data1_trend["HDS_1X"]) >= 0.8) and get_VIB(self.data1, self.fs, self.rpm, "rms") >= 4.5:
+            if (get_VIB(self.data1, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data1, self.fs, self.rpm, "xampl")[0] >= 1.0 ):
                 sign_1 = 1
             else:
                 sign_1 = 0
 
         if self.data2:
-            if (get_VIB(self.data2, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data2, self.fs, self.rpm, "xampl")[0] >= 1.0) and (Numaverage(self.data2_trend["HDS_1X"]) >= 0.8) and get_VIB(self.data2, self.fs, self.rpm, "rms") >= 4.5:
+            if (get_VIB(self.data2, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data2, self.fs, self.rpm, "xampl")[0] >= 1.0 ):
                 sign_2 = 1
             else:
                 sign_2 = 0
 
         if self.data3:
-            if (get_VIB(self.data3, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data3, self.fs, self.rpm, "xampl")[0] >= 1.0) and (Numaverage(self.data3_trend["HDS_1X"]) >= 0.8) and get_VIB(self.data3, self.fs, self.rpm, "rms") >= 4.5:
+            if (get_VIB(self.data3, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data3, self.fs, self.rpm, "xampl")[0] >= 1.0 ):
                 sign_3 = 1
             else:
                 sign_3 = 0
 
         if self.data4:
-            if (get_VIB(self.data4, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data4, self.fs, self.rpm, "xampl")[0] >= 1.0) and (Numaverage(self.data4_trend["HDS_1X"]) >= 0.8) and get_VIB(self.data4, self.fs, self.rpm, "rms") >= 4.5:
+            if (get_VIB(self.data4, self.fs, self.rpm, "xampl")[1] / get_VIB(self.data4, self.fs, self.rpm, "xampl")[0] >= 1.0 ):
                 sign_4 = 1
             else:
                 sign_4 = 0
         sign = sign_1 + sign_2 + sign_3 + sign_4
         if sign:
-            return dict(故障模式=str(conclusion_return.iloc[14]["故障模式"]),
-                        机理现象=str(conclusion_return.iloc[14]["机理现象"]),
-                        机理原因=str(conclusion_return.iloc[14]["机理原因"]))
+            return dict(故障模式=str(conclusion_return.iloc[4]["故障模式"]),
+                        机理现象=str(conclusion_return.iloc[4]["机理现象"]),
+                        机理原因=str(conclusion_return.iloc[4]["机理原因"]))
         else:
-            return "转子部件没有裂纹"
+            return "轴瓦对中正常"
 
-    def dianjikeshangbuzhouwashuimowodong(self):  # 15 电机壳上部轴瓦水膜涡动
-        sign_1, sign_2 = 0, 0
-        if self.data1:
-            if (amplitude(self.data1, self.fs, self.sw_freq) / get_VIB(self.data1, self.fs, self.rpm, "xampl")[0] >= 1.0) and (Numaverage(self.data1_trend["SW_X"]) >= 0.8):
-                sign_1 = 1
-            else:
-                sign_1 = 0
 
-        if self.data2:
-            if (amplitude(self.data2, self.fs, self.sw_freq) / get_VIB(self.data2, self.fs, self.rpm, "xampl")[0] >= 1.0) and (Numaverage(self.data2_trend["SW_X"]) >= 0.8):
-                sign_2 = 1
-            else:
-                sign_2 = 0
 
-        sign = sign_1 + sign_2
-        if sign:
-            return dict(故障模式=str(conclusion_return.iloc[15]["故障模式"]),
-                        机理现象=str(conclusion_return.iloc[15]["机理现象"]),
-                        机理原因=str(conclusion_return.iloc[15]["机理原因"]))
-        else:
-            return "电机壳上部轴瓦没有水膜涡动"
-
-    def dianjikexiabuzhouwashuimowodong(self):  # 16 电机壳下部轴瓦水膜涡动
-        sign_3, sign_4 = 0, 0
-        if self.data3:
-            if (amplitude(self.data3, self.fs, self.sw_freq) / get_VIB(self.data3, self.fs, self.rpm, "xampl")[0] >= 1.0) and (Numaverage(self.data3_trend["SW_X"]) >= 0.8):
-                sign_3 = 1
-            else:
-                sign_3 = 0
-
-        if self.data4:
-            if (amplitude(self.data4, self.fs, self.sw_freq) / get_VIB(self.data4, self.fs, self.rpm, "xampl")[0] >= 1.0) and (Numaverage(self.data4_trend["SW_X"]) >= 0.8):
-                sign_4 = 1
-            else:
-                sign_4 = 0
-
-        sign = sign_3 + sign_4
-        if sign:
-            return dict(故障模式=str(conclusion_return.iloc[16]["故障模式"]),
-                        机理现象=str(conclusion_return.iloc[16]["机理现象"]),
-                        机理原因=str(conclusion_return.iloc[16]["机理原因"]))
-
-        else:
-            return "电机壳下部轴瓦没有水膜涡动"
-
-    def dianjikeshangbuzhouwamosun(self):  # 17 电机壳上部轴瓦磨损(轴承水温)
-        sign_1, sign_2 = 0, 0
-        if self.data1:
-            if (Numaverage(self.data1_trend["HS_1X"]) >= 0.8) or (Numaverage(self.data1_trend["HDS_1X"]) >= 0.8) and get_VIB(self.data1, self.fs, self.rpm, "rms") >= 4.5) and ((Numaverage(self.data1_trend["BTemp"][0]) >= 0.8) or (Numaverage(self.data1_trend["BTemp"][1]) >= 0.8) or (Numaverage(self.data1_trend["BTemp"][2]) >= 0.8) or (Numaverage(self.data1_trend["BTemp"][3]) >= 0.8):
-                sign_1 = 1
-            else:
-                sign_1 = 0
-
-        if self.data2:
-            if  ((Numaverage(self.data2_trend["HS_1X"]) >= 0.8) or (
-                        Numaverage(self.data2_trend["HDS_1X"]) >= 0.8) and get_VIB(self.data2, self.fs, self.rpm,
-                                                                                   "rms") >= 4.5) and \
-                ((Numaverage(self.data2_trend["BTemp"][0]) >= 0.8) or (
-                        Numaverage(self.data2_trend["BTemp"][1]) >= 0.8) or (
-                         Numaverage(self.data2_trend["BTemp"][2]) >= 0.8) or (
-                         Numaverage(self.data2_trend["BTemp"][3]) >= 0.8)):
-                sign_2 = 1
-            else:
-                sign_2 = 0
-
-        sign = sign_1 + sign_2
-        if sign:
-            return dict(故障模式=str(conclusion_return.iloc[17]["故障模式"]),
-                        机理现象=str(conclusion_return.iloc[17]["机理现象"]),
-                        机理原因=str(conclusion_return.iloc[17]["机理原因"]))
-
-        else:
-            return "电机壳上部轴瓦没有磨损"
-
-    def dianjikexiabuzhouwamosun(self):  # 18 电机壳下部轴瓦磨损(轴承水温)
-        sign_3, sign_4 = 0, 0
-        if self.data3:
-            if ((Numaverage(self.data3_trend["HS_1X"]) >= 0.8) or (
-                Numaverage(self.data3_trend["HDS_1X"]) >= 0.8) and get_VIB(self.data3, self.fs, self.rpm,
-                                                                           "rms") >= 4.5) and \
-                ((Numaverage(self.data3_trend["BTemp"][0]) >= 0.8) or (
-                        Numaverage(self.data3_trend["BTemp"][1]) >= 0.8) or (
-                         Numaverage(self.data3_trend["BTemp"][2]) >= 0.8) or (
-                         Numaverage(self.data3_trend["BTemp"][3]) >= 0.8)):
-                sign_3 = 1
-            else:
-                sign_3 = 0
-
-        if self.data4:
-            if  ((Numaverage(self.data4_trend["HS_1X"]) >= 0.8) or (
-                        Numaverage(self.data4_trend["HDS_1X"]) >= 0.8) and get_VIB(self.data4, self.fs, self.rpm,
-                                                                                   "rms") >= 4.5) and \
-                ((Numaverage(self.data4_trend["BTemp"][0]) >= 0.8) or (
-                        Numaverage(self.data4_trend["BTemp"][1]) >= 0.8) or (
-                         Numaverage(self.data4_trend["BTemp"][2]) >= 0.8) or (
-                         Numaverage(self.data4_trend["BTemp"][3]) >= 0.8)):
-                sign_4 = 1
-            else:
-                sign_4 = 0
-
-        sign = sign_3, sign_4
-        if sign:
-            return dict(故障模式=str(conclusion_return.iloc[18]["故障模式"]),
-                        机理现象=str(conclusion_return.iloc[18]["机理现象"]),
-                        机理原因=str(conclusion_return.iloc[18]["机理原因"]))
-        else:
-            return "电机壳下部轴瓦没有磨损"
-
-def devide_diagnosis(): ##总体检测函数
+def devide_diagnosis():  ##总体检测函数
 
     # 传入文件
     alarm_message = {}
@@ -644,71 +954,38 @@ def devide_diagnosis(): ##总体检测函数
     #  "风机": ["风机自由侧", "风机负荷侧"]
     #  }
     json1 = {}
-    trend_data ={}
+    trend_data = {}
 
-
-    if  alarm_message.key.isin('电机'):
+    if alarm_message.key.isin(['电机']):
         diag = Bilengji_Dianji(json1, alarm_message, trend_data)
 
-
         diag.dingziyichang()  # 1,电机定子异常故障
-        diag.qixipianxin() # 2, 电机气隙动态偏心
-        diag.zhuanzitongtiaoduanlie() # 3 电机转子铜条断裂
-        diag.zhuanzitongtiaosongdonghuotuoluo() # 4 电机转子铜条松动或脱落
+        diag.qixipianxin()  # 2, 电机气隙动态偏心
+        diag.zhuanzitongtiaoduanlie()  # 3 电机转子铜条断裂
         diag.zhuanzibupingheng()  # 5 转子不平衡
         diag.zhouwaduizhongbuliang()  # 7 轴瓦对中不良
-        diag.zhuanzhourewanqu() # 8 转轴（热）弯曲  ###这里有轴向位置
-        diag.dongjingbujianmoca()  # 9 动静部件摩擦
         diag.zhuanzibujiansongdong()  # 10 转子部件松动
-        diag.xuanzhuanshisu()  # 11 旋转失速
-        diag.qishihuodongjingganshe()  # 汽蚀（或动静干涉）
-        diag.zhuanzizhichengbujiansongdong()  # 13 转子支承部件松动
-        diag.zhuanzibujianliewen()  # 14 转子部件裂纹
-        diag.dianjikeshangbuzhouwashuimowodong()  # 15 电机壳上部轴瓦水膜涡动
-        diag.dianjikexiabuzhouwashuimowodong()  # 16 电机壳下部轴瓦水膜涡动
-        diag.dianjikeshangbuzhouwamosun()  # 17 电机壳上部轴瓦磨损(轴承水温)
-        diag.dianjikexiabuzhouwamosun()  # 18 电机壳下部轴瓦磨损(轴承水温)
+        diag.zhouchengguzhang() # 轴承故障
 
+    if alarm_message.key.isin(['篦冷风机']):
+        diag = Bilengji_Fengji(json1, alarm_message, trend_data)
+        diag.bupingheng()  # 5 不平衡
+        diag.bupingheng()  # 不对中
+        diag.zhouchengguzhang() #轴承故障
 
+    if alarm_message.key.isin(['风机']):
+        diag = Fengji(json1, alarm_message, trend_data)
+        diag.bupingheng()  # 5 不平衡
+        diag.bupingheng()  # 不对中
+        diag.youmowodong() # 油膜涡动
+        diag.zhouwaduizhongbuliang() # 轴瓦对中不良
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    if alarm_message.key.isin(['齿轮箱']):
+        diag = Gearbox(json1, alarm_message, trend_data)
+        diag.cilunbupingheng()  # 齿轮不平衡
+        diag.cilunbutongzhou() # 齿轮不平衡
+        diag.chimianmoshun()  # 齿面磨损
+        diag.zhouchengguzhang()  # 轴承故障
 
 
 

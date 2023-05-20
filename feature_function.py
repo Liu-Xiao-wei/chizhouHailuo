@@ -266,7 +266,7 @@ def iomega(signal, dt, out_type, in_type=3, windows=None, pro_s=1, freq_ratio=[1
         return feature_rms, feature_pk_pk
 
 
-def calculate_feature(data, feature='rms', fs=None):
+def calculate_feature(data, fs=0, feature='rms'):
     data = get_array(data)
     if feature == 'rms':
         value = np.sqrt(np.mean(data ** 2))
@@ -406,7 +406,7 @@ def get_VIB(signal, sampleFrequency, rpm, featureName="rms"):
         passband_acc_wave = filter_wave(signal, 128, [10, 1000], "bandpass", sampleFrequency)
         passband_wave = iomega(passband_acc_wave, dt=1 / len(passband_acc_wave), out_type=2, in_type=3,
                                freq_ratio=[10, 1000], return_type='signal')
-        passband_rms = calculate_feature(passband_wave, 'rms')
+        passband_rms = calculate_feature(passband_wave, rpm, 'rms')
         return passband_rms
 
     if featureName == 'impulse':
@@ -414,7 +414,7 @@ def get_VIB(signal, sampleFrequency, rpm, featureName="rms"):
         sideband_acc_wave = filter_wave(signal, 128, [5000, 10000], "bandpass", sampleFrequency)
         impulse_wave_1 = hilbert_envelop(sideband_acc_wave)
         impulse_wave = filter_wave(impulse_wave_1, 128, 1000, "lowpass", len(impulse_wave_1))
-        impulse = calculate_feature(impulse_wave, 'impulse')
+        impulse = calculate_feature(impulse_wave, rpm, 'impulse')
         return impulse
 
     if featureName == "xampl":
@@ -437,6 +437,36 @@ def get_VIB(signal, sampleFrequency, rpm, featureName="rms"):
             return_list.append(np.max(y_axis[p1:p2]))  # 从y_axis[p1:p2]中取最大值
 
         return return_list   # return_list[0] 1倍频; return_list[1]  2倍频
+
+
+# if __name__ == '__main__':
+#
+#     from read_dat import *
+#
+#     filepath = r"MANUAL-NONE--50294D205272-272-2700-1682417677-20230425_181437.dat"
+#     Raw_Data = read_dat(filepath)
+#     channel_ID = list(Raw_Data.keys())
+#     # print(channel_ID)
+#     sampling_frequency = Raw_Data["50294D205272011"]['sampling_frequency']  # 16384
+#     # print(sampling_frequency)
+#
+#     signal_data = Raw_Data["50294D205272011"]['signal_data']
+#     signal_data = signal_data - np.mean(signal_data)
+#
+#     # wave = np.array(arraysignal_data)
+#     # rotate = 1800
+#     sample_frequency = 16384
+#     import matplotlib.pyplot as plt
+#     plt.plot(signal_data)
+#     plt.show()
+#
+#     # feature = get_VIB(signal_data, sampling_frequency, rpm=None, featureName='rms')
+#     feature = get_VIB(signal_data, sampling_frequency, 1800, "rms")
+#     print(feature)
+
+
+
+
 
 
 
