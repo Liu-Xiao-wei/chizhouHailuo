@@ -154,12 +154,12 @@ def read_dat(path):
         return data_dict  ## 返回时间戳和通道字典
 
 
-if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-
-    # signal_dict = read_dat('D:\\数据\\转子实验台\\2019-12-4-8K\\LEVEL-50294D208524011-50294D208524-1576116135.dat').get('50294D208524014')
-    signal_dict = read_dat(
-        r'\\192.168.1.203\homes\王之敏\新建文件夹 (3)\诊断报告数据\50294D208409\2021-03-22_16-13-19.dat')  # .get('50294D208505012')
-
-    # signal_dict = read_dat('D:\\数据\宝钢数据\\宝钢现场\\TIME_INTERVAL-50294D208505011-50294D208505-1574051418.dat').get('50294D208505011')
-    # json.dump(signal_dict, open('jsonstamp.json', 'w+'))
+# if __name__ == '__main__':
+#     import matplotlib.pyplot as plt
+#
+#     # signal_dict = read_dat('D:\\数据\\转子实验台\\2019-12-4-8K\\LEVEL-50294D208524011-50294D208524-1576116135.dat').get('50294D208524014')
+#     signal_dict = read_dat(
+#         r'\\192.168.1.203\homes\王之敏\新建文件夹 (3)\诊断报告数据\50294D208409\2021-03-22_16-13-19.dat')  # .get('50294D208505012')
+#
+#     # signal_dict = read_dat('D:\\数据\宝钢数据\\宝钢现场\\TIME_INTERVAL-50294D208505011-50294D208505-1574051418.dat').get('50294D208505011')
+#     # json.dump(signal_dict, open('jsonstamp.json', 'w+'))

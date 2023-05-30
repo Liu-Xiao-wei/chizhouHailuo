@@ -10,7 +10,7 @@ import pandas as pd
 from scipy.signal import get_window, butter, filtfilt, lfilter, butter, sosfilt, hilbert, get_window
 from scipy.interpolate import make_interp_spline
 
-from feature_extraction import add_windows, freq_select
+# from feature_extraction import add_windows, freq_select  # 对应函数已经从feature_extraction中提出
 
 
 class Features:
@@ -30,6 +30,29 @@ class Features:
     x_4 = None  # 4倍频
     x_5 = None  # 5倍频
 
+
+def add_windows(signal, window='hann'):
+    """
+
+    """
+    signal_array = get_array(signal)
+    window_len = len(signal_array)
+    window_array = get_window(window, window_len)
+    return window_array * signal_array
+
+def freq_select(fft_signal, sampling_frequency, freq_ratio):
+    fft_signal_len = len(fft_signal)
+    fftshift_signal = fftshift(fft_signal)
+    freq = fftfreq(fft_signal_len, 1 / sampling_frequency)
+    fftshift_freq = fftshift(freq)
+    low_cutoff_frequency = sampling_frequency / freq_ratio[1]
+    high_cutoff_frequency = sampling_frequency / freq_ratio[0]
+    # 频率选择的下限为10HZ,上限为1000HZ。即如果采样频率/信号频率小于10HZ，则将频率下限设置为10HZ。
+    low_cutoff_frequency = max(low_cutoff_frequency, 10)
+    high_cutoff_frequency = min(high_cutoff_frequency, 4000)
+    fftshift_freq_index = [low_cutoff_frequency >= abs(f) for f in fftshift_freq]
+    fftshift_signal[fftshift_freq_index] = complex(0.0, 0.0)
+    return fftshift_signal
 
 def trend_change(data):
     order = 1
@@ -83,7 +106,6 @@ def get_HCR(signal, sampleFrequency, center_frequency, sideband_frequency, order
         value4 = math.sqrt(amplitude(signal, sampleFrequency,center_frequency)**2)
         value2 += value4
     return value1/value2
-
 
 def get_HS(signal, sampleFrequency, x_frequency, order):
     """
@@ -268,6 +290,7 @@ def iomega(signal, dt, out_type, in_type=3, windows=None, pro_s=1, freq_ratio=[1
 
 def calculate_feature(data, fs=0, feature='rms'):
     data = get_array(data)
+
     if feature == 'rms':
         value = np.sqrt(np.mean(data ** 2))
     elif feature == 'peak':
@@ -277,9 +300,8 @@ def calculate_feature(data, fs=0, feature='rms'):
     # elif feature == 'kurtosis':
     #     value = self._extracted_kurtosis_skew(data, 4)
     elif feature == 'impulse':
-        value = np.sqrt(np.mean(data ** 2))  # 需要确认宁国水泥最新算法，好像是有效值计算方法
-    # elif feature == 'skew':
-    #     value = self._extracted_kurtosis_skew(data, 3)
+        value = np.sqrt(np.mean(data ** 2)) / 9.8 # 需要确认宁国水泥最新算法，好像是有效值计算方法
+
     return value
 
 
@@ -322,67 +344,8 @@ def fft_spectrum(x: np.ndarray, fs: float):
     """
     n = len(x)
     f = fs * np.arange(n // 2) / n
-    y = abs(np.fft.fft(x))[:int(n / 2)] / n  # 归一化处理
+    y = abs(np.fft.fft(x))[:int(n / 2)] * 2 / n
     return f, y
-
-
-def VibFeatures(signal, sampleFrequency, rpm, featureName="rms"):
-    """
-    计算振动波形信号的特征值
-    :param signal: 振动信号原始波形-加速度
-    :param sampleFrequency: 信号采样频率
-    :param rpm: 该通道位置处对应的转速
-    :return: 特征值
-    """
-    feature_return = Features()
-    signal -= np.mean(signal)
-    # 加速度有效值
-    acc_rms = calculate_feature(signal, sampleFrequency, 'rms')
-    feature_return.acc_rms = acc_rms
-    # 速度有效值
-    passband_acc_wave = filter_wave(signal, 128, [10, 1000], "bandpass", sampleFrequency)
-    passband_wave = iomega(passband_acc_wave, dt=1 / len(passband_acc_wave), out_type=2, in_type=3,
-                           freq_ratio=[10, 1000], return_type='signal')
-    passband_rms = calculate_feature(passband_wave, 'rms')
-    feature_return.vel_rms = passband_rms
-    # 加速度峰值
-    acc_peak = calculate_feature(signal, '峰值')
-    feature_return.acc_peak = acc_peak
-    # 冲击值
-    sideband_acc_wave = filter_wave(signal, 128, [5000, 10000], "bandpass", sampleFrequency)
-    impulse_wave_1 = hilbert_envelop(sideband_acc_wave)
-    impulse_wave = filter_wave(impulse_wave_1, 128, 1000, "lowpass", len(impulse_wave_1))
-    impulse = calculate_feature(impulse_wave, '冲击值')
-    feature_return.impulse = impulse
-    # 倍频值
-    return_list = []
-    x_axis, y_axis = fft_spectrum(signal, sampleFrequency)
-    if rpm is None:
-        try:
-            # 防止y_axis长度不足1000时
-            max_ampl_index = y_axis[0:999].index(y_axis[0:999])  # 取0-1000Hz中的最大值
-            rpm = x_axis[max_ampl_index][0] * 60  # 根据幅值中最大值索引找到频率中对应位置
-        except IndexError:
-            max_ampl_index = y_axis.index(y_axis)  # 取0-1000Hz中的最大值
-            rpm = x_axis[max_ampl_index][0] * 60
-    ratio = x_axis[1] - x_axis[0]  # 频率分辨率
-    x_1 = rpm / 60
-    for i in [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5]:
-        p1 = int((i * x_1 - 1) / ratio)  # 倍频左侧1Hz
-        p2 = math.ceil((i * x_1 + 1) / ratio)  # 倍频右侧1Hz
-        return_list.append(np.max(y_axis[p1:p2]))  # 从y_axis[p1:p2]中取最大值
-    feature_return.x_half1 = return_list[0]  # 0.5倍频
-    feature_return.x_half3 = return_list[2]  # 1.5倍频
-    feature_return.x_half5 = return_list[4]  # 2.5倍频
-    feature_return.x_half7 = return_list[6]  # 3.5倍频
-    feature_return.x_half9 = return_list[8]  # 4.5倍频
-    feature_return.x_half11 = return_list[10] # 5.5倍频
-    feature_return.x_1 = return_list[1]  # 一倍频
-    feature_return.x_2 = return_list[3]  # 二倍频
-    feature_return.x_3 = return_list[5]  # 三倍频
-    feature_return.x_4 = return_list[7]  # 四倍频
-    feature_return.x_5 = return_list[9]  # 五倍频
-    return feature_return
 
 
 def get_VIB(signal, sampleFrequency, rpm, featureName="rms"):
@@ -413,7 +376,7 @@ def get_VIB(signal, sampleFrequency, rpm, featureName="rms"):
         # 冲击值
         sideband_acc_wave = filter_wave(signal, 128, [5000, 10000], "bandpass", sampleFrequency)
         impulse_wave_1 = hilbert_envelop(sideband_acc_wave)
-        impulse_wave = filter_wave(impulse_wave_1, 128, 1000, "lowpass", len(impulse_wave_1))
+        impulse_wave = filter_wave(signal, 128, [3, 500], "bandpass", impulse_wave_1)
         impulse = calculate_feature(impulse_wave, rpm, 'impulse')
         return impulse
 
@@ -438,31 +401,6 @@ def get_VIB(signal, sampleFrequency, rpm, featureName="rms"):
 
         return return_list   # return_list[0] 1倍频; return_list[1]  2倍频
 
-
-# if __name__ == '__main__':
-#
-#     from read_dat import *
-#
-#     filepath = r"MANUAL-NONE--50294D205272-272-2700-1682417677-20230425_181437.dat"
-#     Raw_Data = read_dat(filepath)
-#     channel_ID = list(Raw_Data.keys())
-#     # print(channel_ID)
-#     sampling_frequency = Raw_Data["50294D205272011"]['sampling_frequency']  # 16384
-#     # print(sampling_frequency)
-#
-#     signal_data = Raw_Data["50294D205272011"]['signal_data']
-#     signal_data = signal_data - np.mean(signal_data)
-#
-#     # wave = np.array(arraysignal_data)
-#     # rotate = 1800
-#     sample_frequency = 16384
-#     import matplotlib.pyplot as plt
-#     plt.plot(signal_data)
-#     plt.show()
-#
-#     # feature = get_VIB(signal_data, sampling_frequency, rpm=None, featureName='rms')
-#     feature = get_VIB(signal_data, sampling_frequency, 1800, "rms")
-#     print(feature)
 
 
 
