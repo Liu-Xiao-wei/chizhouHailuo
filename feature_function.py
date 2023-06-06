@@ -76,16 +76,39 @@ def amplitude(signal, sampleFrequency, frequency):
     x_axis, y_axis = fft_spectrum(signal, sampleFrequency)
     ratio = x_axis[1]-x_axis[0]
     if frequency-ratio >= 0:
-        value = max(y_axis[frequency-ratio:frequency+ratio])
+        value = max(y_axis[int(frequency-ratio):int(frequency+1+ratio)])
     else:
-        value = max(y_axis[0:frequency+ratio])
+        value = max(y_axis[0:int(frequency+ratio)])
     return value
 
 
-def get_HCR(signal, sampleFrequency, center_frequency, sideband_frequency, order, num=5):
-    """
-    计算选定振动测点特征能量比;边带频率和中心频率的比值
+# def get_HCR(signal, sampleFrequency, center_frequency, sideband_frequency, order, num=5):
+#     """
+#     计算选定振动测点特征能量比;边带频率和中心频率的比值
+#
+#     :param signal:振动测点输入信号
+#     :param sampleFrequency: 采样频率
+#     :param center_frequency:   float:测点-特征名称（中心频率）
+#     :param sideband_frequency: float:测点-特征名称（边带频率）
+#     :param order:  int:阶次
+#     :param num:int:边带选择个数
+#     :return:特征能量比（Harmonic center ratio）
+#     """
+#
+#     value1 = 0  # 分子
+#     value2 = 0  # 分母
+#     for i in range(order):
+#         for j in range(num):
+#             value3 = math.sqrt(sum(amplitude(signal, sampleFrequency, center_frequency-j*sideband_frequency)**2 + \
+#                           amplitude(signal, sampleFrequency,center_frequency+j*sideband_frequency)**2))
+#             value1 += value3
+#
+#         value4 = math.sqrt(amplitude(signal, sampleFrequency,center_frequency)**2)
+#         value2 += value4
+#     return value1/value2
 
+def get_HCR(signal, sampleFrequency, center_frequency, sideband_frequency, order):
+    '''
     :param signal:振动测点输入信号
     :param sampleFrequency: 采样频率
     :param center_frequency:   float:测点-特征名称（中心频率）
@@ -93,19 +116,19 @@ def get_HCR(signal, sampleFrequency, center_frequency, sideband_frequency, order
     :param order:  int:阶次
     :param num:int:边带选择个数
     :return:特征能量比（Harmonic center ratio）
-    """
+    '''
 
-    value1 = 0  # 分子
-    value2 = 0  # 分母
-    for i in range(order):
-        for j in range(num):
-            value3 = math.sqrt(sum(amplitude(signal, sampleFrequency, center_frequency-j*sideband_frequency)**2 + \
-                          amplitude(signal, sampleFrequency,center_frequency+j*sideband_frequency)**2))
-            value1 += value3
+    T2 = amplitude(signal, sampleFrequency, center_frequency)
+    T3 = amplitude(signal, sampleFrequency, sideband_frequency)
 
-        value4 = math.sqrt(amplitude(signal, sampleFrequency,center_frequency)**2)
-        value2 += value4
-    return value1/value2
+    den = [(Z * T2) ** 2 for Z in range(1, order + 1)]
+    den_sum = np.sqrt(np.sum(den))
+    b = []
+    for Z in range(1, order + 1):
+        a = [(Z * T2 - n * T3) ** 2 + (Z * T2 + n * T3) ** 2 for n in range(1, 6)]
+        b.append(np.sqrt(np.sum(a)))
+
+    return np.sum(b) / den_sum
 
 def get_HS(signal, sampleFrequency, x_frequency, order):
     """
@@ -118,7 +141,7 @@ def get_HS(signal, sampleFrequency, x_frequency, order):
     """
     frequency_amplitude_list = []
     for i in range(order):
-        value = amplitude(signal, sampleFrequency, i*x_frequency)
+        value = amplitude(signal, sampleFrequency, (i+1)*x_frequency)
         frequency_amplitude_list.append(value)
     return np.sqrt(np.sum(frequency_amplitude_list))
 
@@ -206,6 +229,33 @@ def detrend(signal, deg=2):
 
 
 # =========================================================================================================
+# 包络谱分析
+def envelope_spectrum(signal_series, fs):
+    """
+    实现时序包络分析普
+    :param signal_series: 采样的时序数据
+    :param fs: 采样的频率
+    :return: 包络谱的频率 x_frequency 和幅值 y_amplitude (仅仅是大于零的频率)
+    """
+    len_signal = len(signal_series)  # 计算采样数据的长度
+    hy = hilbert_envelop(signal_series)  # 计算信号的包络
+    hy -= np.mean(hy)
+    # x_frequency = np.array([(i + 1) * fs / data_len for i in range(int(data_len / 2))])  # 计算频率
+    # y_amplitude = y_amplitude[len(x_frequency) + 1:]  # 偏移 因为FFT后为对称的双边谱，因此只取一半
+    y_dual_amplitude = abs(fftshift(fft(hy))) * 2 / len_signal  # 计算幅值
+    x_dual_freq = fftshift(fftfreq(len_signal, 1 / fs))  # 计算频率
+    x_freq = x_dual_freq[x_dual_freq >= 0]
+    y_amplitude = y_dual_amplitude[x_dual_freq >= 0]
+    assert len(x_freq) == len(y_amplitude)
+    # 让x_frequency和y_amplitude的维度一样
+    # if len(y_amplitude) > len(x_frequency):
+    #     length = len(y_amplitude) - len(x_frequency)
+    #     y_amplitude = y_amplitude[length:]
+    # elif len(y_amplitude) < len(x_frequency):
+    #     length = len(x_frequency) - len(y_amplitude)
+    #     x_frequency = x_frequency[length:]
+    return x_freq, y_amplitude
+
 
 
 def filter_wave(x: np.ndarray, order: int, wn: int or list, type: str, fs: float, output: str = 'sos'):
@@ -376,8 +426,9 @@ def get_VIB(signal, sampleFrequency, rpm, featureName="rms"):
         # 冲击值
         sideband_acc_wave = filter_wave(signal, 128, [5000, 10000], "bandpass", sampleFrequency)
         impulse_wave_1 = hilbert_envelop(sideband_acc_wave)
-        impulse_wave = filter_wave(signal, 128, [3, 500], "bandpass", impulse_wave_1)
+        impulse_wave = filter_wave(signal, 128, [3, 500], "bandpass", sampleFrequency)
         impulse = calculate_feature(impulse_wave, rpm, 'impulse')
+
         return impulse
 
     if featureName == "xampl":
@@ -403,6 +454,136 @@ def get_VIB(signal, sampleFrequency, rpm, featureName="rms"):
 
 
 
+# 计分函数
+def calculate_weight_score_3_v2(a1, a2, a3, x):
+    """
+    a1:下限值
+    a2:上限值
+    a3:报警值
+    return:
+        weight,score
+    """
+    print('-----', a1, a2, a3, x)
+
+    b = 1 / 4 * a1 + 3 / 4 * a2
+    try:
+        if x < b:
+            w = 1
+            score = 90
+        elif b <= x < a2:
+            w = math.exp(((x - b) / b) ** 2)
+            k = (80 - 90) / (a2 - b)
+            score = 90 - abs(k * (x - b))
+        elif a2 <= x < a3:
+            w = math.exp(((x - b) / b) ** 2 + ((x - a2) / a2) ** 2)
+            k = (60 - 80) / (a3 - a2)
+            score = 80 - abs(k * (x - a2))
+        else:  # x>a3 报警值
+            print('dd')
+            w = math.exp(((x - b) / b) ** 2 + ((x - a2) / a2) ** 2 + ((x - a3) / a3) ** 2)
+            k = (60 - 80) / (a3 - a2)
+            score = 80 - abs(k * (x - a2))
+            if score > 0:
+                score = score
+            else:
+                score = 0
+    except:
+        x = a3
+        w = math.exp(((x - b) / b) ** 2 + ((x - a2) / a2) ** 2 + ((x - a3) / a3) ** 2)
+        k = (60 - 80) / (a3 - a2)
+        score = 80 - abs(k * (x - a2))
+        if score > 0:
+            score = score
+        else:
+            score = 0
+    return round(w, 2), round(score, 2)
+
+# 时域图
+def time_plot(data, unit):
+    bwith = 2
+    # 字体大小
+    fontsize = 20
+    # 刻度线大小
+    x_y_ticks_size = 18
+    # 图片大小l
+    figsize = (10, 6)
+    # 画图
+    plt.figure("", figsize=figsize)
+    plt.xticks(fontsize=x_y_ticks_size)
+    plt.yticks(fontsize=x_y_ticks_size)
+    plt.title('时域图 ' + unit, fontsize=fontsize)
+    plt.xlabel('时间(s)', fontsize=fontsize)
+    plt.ylabel('振幅 (um)', fontsize=fontsize)
+    plt.grid(ls='--', axis="y")
+    # 获取边框并设置边框粗细
+    ax = plt.gca()
+    ax.spines['bottom'].set_linewidth(bwith)
+    ax.spines['left'].set_linewidth(bwith)
+    ax.spines['top'].set_linewidth(bwith)
+    ax.spines['right'].set_linewidth(bwith)
+    plt.plot(list(range(1, len(data) + 1)), data)
+    figfile = BytesIO()
+    plt.savefig(figfile, format='png', dpi=400)
+    figfile.seek(0)  # rewind to beginning of file
+    figdata_png = base64.b64encode(figfile.getvalue())
+    img_str = str(figdata_png, "utf-8")
+    plt.close()
+    return figfile
+
+# 频域图
+def frequency_plot(data, unit, fs):
+    x_axis, y_axis = fft_spectrum(data, fs)
+    bwith = 2
+    # 字体大小
+    fontsize = 20
+    # 刻度线大小
+    x_y_ticks_size = 18
+    # 图片大小l
+    figsize = (10, 6)
+    # 画图
+    plt.figure("", figsize=figsize)
+    plt.xticks(fontsize=x_y_ticks_size)
+    plt.yticks(fontsize=x_y_ticks_size)
+    plt.title('频域图 ' + unit, fontsize=fontsize)
+    plt.xlabel('频率(Hz)', fontsize=fontsize)
+    plt.ylabel('振幅 (um)', fontsize=fontsize)
+    plt.grid(ls='--', axis="y")
+    # 获取边框并设置边框粗细
+    ax = plt.gca()
+    ax.spines['bottom'].set_linewidth(bwith)
+    ax.spines['left'].set_linewidth(bwith)
+    ax.spines['top'].set_linewidth(bwith)
+    ax.spines['right'].set_linewidth(bwith)
+    plt.plot(x_axis, y_axis)
+    figfile = BytesIO()
+    plt.savefig(figfile, format='png')
+    figfile.seek(0)  # rewind to beginning of file
+    figdata_png = base64.b64encode(figfile.getvalue())
+    img_str = str(figdata_png, "utf-8")
+    plt.close()
+    return figfile
+
+# 包络图
+def envelop_plot(data, unit, fs):
+    x_axis, y_axis = envelope_spectrum(data, fs)
+    fontsize = 10
+    # plt.subplot(3, 1, 2)
+    plt.plot(x_axis, y_axis, linewidth=0.5)
+    plt.xticks(())  # fontsize=x_y_ticks_size
+    plt.yticks()
+    plt.rcParams['font.sans-serif'] = ['SimHei']
+    plt.rcParams['axes.unicode_minus'] = False
+    plt.title('包络图 ' + unit, fontsize=fontsize)
+    plt.grid(ls='--', axis="y")
+    figfile = BytesIO()
+    plt.savefig(figfile, format='png')
+    figfile.seek(0)  # rewind to beginning of file
+    figdata_png = base64.b64encode(figfile.getvalue())
+    img_str = str(figdata_png, "utf-8")
+    plt.close()
+    return img_str
+
+#===========================================#
 
 
 
