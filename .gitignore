@@ -1,0 +1,17 @@
+/target/
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+src/*.iws
+src/*.iml
+src/*.ipr
+src/*.pyc
+src/**/__pycache__
