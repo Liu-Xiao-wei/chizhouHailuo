@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # @Time    : 2023/04/07
 # @Author  : liuxiaowei
-
+import base64
 import time
 import math
 from scipy.fftpack import fft, fftshift, fftfreq, ifft, hilbert, ifftshift
@@ -9,6 +9,9 @@ import numpy as np
 import pandas as pd
 from scipy.signal import get_window, butter, filtfilt, lfilter, butter, sosfilt, hilbert, get_window
 from scipy.interpolate import make_interp_spline
+import matplotlib.pyplot as plt
+from io import BytesIO
+import base64
 
 # from feature_extraction import add_windows, freq_select  # 对应函数已经从feature_extraction中提出
 
@@ -584,8 +587,6 @@ def envelop_plot(data, unit, fs):
     return img_str
 
 #===========================================#
-
-
 
 
 
